@@ -7,6 +7,15 @@
     background-color: lightyellow;
   }
 </style>
+
+</head>
+<body>
+  <input id="next_phase" type='button' value='Далее'/>
+  <div id='game'>
+    <div id='board'></div>
+    <div id='players'></div>
+  </div>
+
 <script type="text/javascript" charset="utf-8">
   var socket = io.connect('http://localhost:' + 5000);
   socket.on('connect', function() {
@@ -25,16 +34,14 @@
     $('#players').html(player_divs.join(''));
   });
 
-  setInterval(function () {
+  /*setInterval(function () {
         console.log('emit next_phase');
         socket.emit('next_phase');
-      }, 3000);
+      }, 2000);*/
+  $('#next_phase').click(function() {
+        console.log('emit next_phase');
+        socket.emit('next_phase');
+      });
 </script>
-</head>
-<body>
-  <div id='game'>
-    <div id='board'></div>
-    <div id='players'></div>
-  </div>
 </body>
 </html>

@@ -28,7 +28,7 @@
     for (var i = 0; i < data.players.length; ++i) {
       var p = data.players[i];
       player_divs.push('<div class="player ' + (p.pos == data.button_pos ? 'button' : '') + '">'
-                       + p.name + ': ' 
+                       + p.name + ' ' + p.chips + ': ' 
                        + p.hand.join(' ') + '</div>');
     }
     $('#players').html(player_divs.join(''));

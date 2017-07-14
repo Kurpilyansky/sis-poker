@@ -95,7 +95,7 @@ def handle_get_full_state():
 @socketio.on('next_phase')
 def handle_next_phase():
   game_state.next_phase()
-  emit('full_state', game_state.as_dict(), json=True)
+  emit('full_state', game_state.as_dict(), json=True, broadcast=True)
 
 if __name__ == '__main__':
   socketio.run(app)

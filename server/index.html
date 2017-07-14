@@ -1,0 +1,40 @@
+<html>
+<head>
+<script type="text/javascript" src="socket.io.min.js"></script>
+<script type="text/javascript" src="jquery-3.2.1.min.js"></script>
+<style>
+  .button {
+    background-color: lightyellow;
+  }
+</style>
+<script type="text/javascript" charset="utf-8">
+  var socket = io.connect('http://localhost:' + 5000);
+  socket.on('connect', function() {
+    socket.emit('get_full_state');
+  });
+  socket.on('full_state', function(data) {
+    console.log(data);
+    $('#board').text(data.board.join(' '));
+    player_divs = []
+    for (var i = 0; i < data.players.length; ++i) {
+      var p = data.players[i];
+      player_divs.push('<div class="player ' + (p.pos == data.button_pos ? 'button' : '') + '">'
+                       + p.name + ': ' 
+                       + p.hand.join(' ') + '</div>');
+    }
+    $('#players').html(player_divs.join(''));
+  });
+
+  setInterval(function () {
+        console.log('emit next_phase');
+        socket.emit('next_phase');
+      }, 3000);
+</script>
+</head>
+<body>
+  <div id='game'>
+    <div id='board'></div>
+    <div id='players'></div>
+  </div>
+</body>
+</html>

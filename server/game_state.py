@@ -12,6 +12,7 @@ TURN = 'TURN'
 RIVER = 'RIVER'
 SHOWDOWN = 'SHOWDOWN'
 END_ROUND = 'END_ROUND'
+END_GAME = 'END_GAME'
 
 START = 'START'
 FOLD = 'FOLD'
@@ -28,6 +29,7 @@ class Player:
     self.id = player_id
     self.name = name
     self.chips = chips
+    self.chips_on_round_start = self.chips
     self.bet = 0
     self.any_moved = False
     self.is_fault = False
@@ -63,6 +65,7 @@ class Player:
     self.is_fault = False
     self.opened_cards = False
     self.hand = []
+    self.chips_on_round_start = self.chips
 
   def evaluate_hand(self, evaluator, board):
     if not self.hand:
@@ -202,12 +205,18 @@ class GameState:
     self.cur_player = i
     return True
 
-  def iter_players(self):
+  def iter_players(self, include_losers=False):
     n = len(self.players)
     for i in range(n):
       j = (i + self.button_pos + 1) % n
       if not self.players[j].place:
         yield self.players[j]
+    if include_losers:
+      player_by_places = {p.place: p for p in self.players if p.place}
+      for place in range(len(self.players) + 1):
+        player = player_by_places.get(place)
+        if player:
+          yield player
 
   def _deal_cards(self):
     if self.state == None:
@@ -267,6 +276,23 @@ class GameState:
     self.state = None
     self.board = []
     self.pots = []
+
+    new_losers = []
+    last_place = len([p for p in self.players if not p.place])
+    for p in self.players:
+      if p.chips == 0 and not p.place:
+        new_losers.append(p)
+    new_losers.sort(key=lambda p: p.chips_on_round_start)
+    for p in new_losers:
+      p.place = last_place
+      last_place -= 1
+      p.clear_round_info()
+    if last_place == 1:
+      winner = [p for p in self.players if not p.place][0]
+      winner.place = 1
+      self.state = END_GAME
+      return
+
     for p in self.iter_players():
       p.clear_round_info()
     self.cur_player = self.button_pos
@@ -324,6 +350,8 @@ class GameState:
             'args': args or []}
 
   def _get_actions(self):
+    if self.state == END_GAME:
+      return []
     if self.state == None:
       return [self._build_action(START, 'Новая раздача')]
     if self.state == END_ROUND:
@@ -347,6 +375,6 @@ class GameState:
             'players': [p.as_dict(self.evaluator,
                                   self.board,
                                   p.id == self.players[self.cur_player].id)
-                        for p in self.iter_players()],
+                        for p in self.iter_players(True)],
             'actions': self._get_actions()}
 

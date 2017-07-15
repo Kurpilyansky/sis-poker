@@ -23,14 +23,27 @@
   socket.on('full_state', function(data) {
     console.log(data);
     $('#board').text(data.board.join(' '));
-    $('#pot').text('Pot: ' + data.pots.join(', '));
+    $('#pot').text(data.pots.length ? ('Pot: ' + data.pots.join(', ')) : '');
     var player_divs = []
     for (var i = 0; i < data.players.length; ++i) {
       var p = data.players[i];
-      player_divs.push('<div class="player ' + (p.is_current ? 'current' : '') + '">'
-                       + p.name + ' ' + p.chips + '+' + p.bet + ': ' 
-                       + p.hand.join(' ') + ' win_probs ' + p.win_probs.join(' ')
-                       + p.combination + '</div>');
+      text = '<div class="player ' + (p.is_current ? 'current' : '') + '">' + p.name;
+      if (p.place) {
+        text += ' &ndash; ' + p.place + ' место'
+      } else {
+        text += ' ' + p.chips + ' + ' + p.bet;
+        if (p.hand.length) {
+          text += ': ' + p.hand.join(' ');
+        }
+        if (p.combination) {
+          text += ' ' + p.combination;
+        }
+        if (p.win_probs) {
+          text += ' '  + p.win_probs.join(' ')
+        }
+      }
+      text += '</div>';
+      player_divs.push(text);
     }
     $('#players').html(player_divs.join(''));
 

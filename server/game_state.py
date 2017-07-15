@@ -83,12 +83,23 @@ class CardDeck:
     return res
 
 
+class Pot:
+  chips = 0
+  players = []
+
+  def add_player_bet(self, player, bet):
+    bet = min(bet, player.bet)
+    self.chips += bet
+    self.players.append(player)
+    player.bet -= bet
+
+
 class GameState:
 
   def __init__(self, players):
     self.state = None
     self.deck = None
-    self.pot = 0
+    self.pots = []
     self.cur_bet = 0
     self.board = []
     self.players = players
@@ -102,9 +113,22 @@ class GameState:
     return cls(players)
 
   def _move_bets_to_pot(self):
-    for p in self.iter_players():
-      self.pot += p.bet
-      p.bet = 0
+    if not self.pots:
+      self.pots = [Pot()]
+    first = True
+    while True:
+      bets = [p.bet for p in self.iter_players() if p.in_game and p.bet > 0]
+      if not bets:
+        break
+      if not first:
+        self.pots.append(Pot())
+      else:
+        self.pots[-1].players = []
+      first = False
+      min_bet = min(bets)
+      for p in self.iter_players():
+        if p.bet > 0:
+          self.pots[-1].add_player_bet(p, min_bet)
 
   def _start_new_street(self, new_state):
     if self.state:
@@ -177,6 +201,7 @@ class GameState:
   def _end_round(self):
     self.state = None
     self.board = []
+    self.pots = []
     for p in self.iter_players():
       p.clear_round_info()
     self.cur_player = self.button_pos
@@ -250,7 +275,7 @@ class GameState:
   def as_dict(self):
     return {'state': self.state,
             'board': self.board,
-            'pot': self.pot,
+            'pots': [pot.chips for pot in self.pots],
             'cur_bet': self.cur_bet,
             'players': [p.as_dict(p.id == self.players[self.cur_player].id) for p in self.iter_players()],
             'actions': self._get_actions()}

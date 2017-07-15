@@ -26,7 +26,7 @@
   socket.on('full_state', function(data) {
     console.log(data);
     $('#board').text(data.board.join(' '));
-    $('#pot').text('Pot: ' + data.pot);
+    $('#pot').text('Pot: ' + data.pots.join(', '));
     player_divs = []
     for (var i = 0; i < data.players.length; ++i) {
       var p = data.players[i];

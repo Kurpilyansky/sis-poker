@@ -226,6 +226,9 @@ class GameState:
       for i in range(2):
         for p in self.iter_players():
           p.hand += self.deck.draw(1)
+      players_count = len([p for p in self.players if not p.place])
+      if players_count == 2:
+        self._find_next_player()  #Head's up
       for i in range(2):
         self.players[self.cur_player].make_bet(self.blinds[i], blind=True)
         self._find_next_player()

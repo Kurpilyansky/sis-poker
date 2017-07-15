@@ -9,6 +9,7 @@ FLOP = 'FLOP'
 TURN = 'TURN'
 RIVER = 'RIVER'
 SHOWDOWN = 'SHOWDOWN'
+END_ROUND = 'END_ROUND'
 
 START = 'START'
 FOLD = 'FOLD'
@@ -26,6 +27,7 @@ class Player:
     self.name = name
     self.chips = chips
     self.bet = 0
+    self.any_moved = False
     self.is_fault = False
     self.opened_cards = False
     self.place = None
@@ -37,21 +39,29 @@ class Player:
 
   def fold(self):
     self.is_fault = True
+    self.any_moved = True
 
   def open_cards(self):
     self.opened_cards = True
+    self.any_moved = True
 
-  def make_bet(self, bet):
+  def make_bet(self, bet, blind=False):
     delta = bet - self.bet
     self.bet += delta
     self.chips -= delta
+    self.any_moved = not blind
 
   def make_all_in(self):
     delta = self.chips
     self.bet += delta
     self.chips -= delta
+    self.any_moved = True
+
+  def clear_street_info(self):
+    self.any_moved = False
 
   def clear_round_info(self):
+    self.clear_street_info()
     self.is_fault = False
     self.opened_cards = False
     self.hand = []
@@ -106,20 +116,25 @@ class GameState:
       self._move_bets_to_pot()
     self.state = new_state
     self.cur_bet = 0
+    for p in self.iter_players():
+      p.clear_street_info()
     self.cur_player = self.button_pos
     self._find_next_player()
   
   def _find_next_player(self):
+    iters = 0
     n = len(self.players)
     i = self.cur_player
-    print('start ' + str(i))
     while True:
+      iters += 1
       i = (i + 1) % n
       if self.players[i].in_game and self.players[i].chips > 0:
         break
       # fix infinite loop for all in all-in
-    print('end ' + str(i))
+      if iters > 2 * n:
+        return False
     self.cur_player = i
+    return True
 
   def iter_players(self):
     n = len(self.players)
@@ -137,7 +152,7 @@ class GameState:
         for p in self.iter_players():
           p.hand += self.deck.draw(1)
       for i in range(2):
-        self.players[self.cur_player].make_bet(self.blinds[i])
+        self.players[self.cur_player].make_bet(self.blinds[i], blind=True)
         self._find_next_player()
       self.cur_bet = self.blinds[1]
     elif self.state == PREFLOP:
@@ -152,12 +167,19 @@ class GameState:
       self._start_new_street(RIVER)
       self.deck.draw(1)
       self.board += self.deck.draw(1)
-    elif self.state != SHOWDOWN:
+    elif self.state == RIVER:
       self._start_new_street(SHOWDOWN)
+    elif self.state == SHOWDOWN:
+      self._detect_winner()
+    else:
+      raise ValueError('unknown self.state ' + self.state)
 
-  def _end_round(self):
+  def _detect_winner(self):
     self._move_bets_to_pot()
     #TODO move pot to winner
+    self.state = END_ROUND
+
+  def _end_round(self):
     self.state = None
     self.board = []
     for p in self.iter_players():
@@ -165,6 +187,10 @@ class GameState:
     self.cur_player = self.button_pos
     self._find_next_player()
     self.button_pos = self.cur_player
+
+  def _all_in_all_in(self):
+    while self.state != END_ROUND:
+      self._deal_cards()
 
   def _check_one_player_in_game(self):
     count = 0
@@ -177,10 +203,13 @@ class GameState:
     if action_type == START:
       self._deal_cards()
       return
+    elif action_type == END_ROUND:
+      self._end_round()
+      return
     elif action_type == FOLD:
       self.players[self.cur_player].fold()
       if self._check_one_player_in_game():
-        self._end_round()
+        self._detect_winner()
         return
     elif action_type == CALL or action_type == CHECK:
       self.players[self.cur_player].make_bet(self.cur_bet)
@@ -196,8 +225,11 @@ class GameState:
       self.players[self.cur_player].open_cards()
     else:
       return
-    self._find_next_player()
-    if self.players[self.cur_player].bet == self.cur_bet:
+    if not self._find_next_player():
+      self._all_in_all_in()
+      return
+    player = self.players[self.cur_player]
+    if player.bet == self.cur_bet and player.any_moved:
       self._deal_cards()
 
   @classmethod
@@ -207,6 +239,8 @@ class GameState:
   def _get_actions(self):
     if self.state == None:
       return [self._build_action(START, 'Новая раздача')]
+    if self.state == END_ROUND:
+      return [self._build_action(END_ROUND, 'Закончить раздачу')]
     if self.state == SHOWDOWN:
       return [self._build_action(FOLD),
               self._build_action(OPEN)]
@@ -215,6 +249,7 @@ class GameState:
     actions.append(self._build_action(FOLD))
     actions.append(self._build_action(CHECK if self.cur_bet == player.bet else CALL))
     actions.append(self._build_action(BET if player.bet == 0 else RAISE))
+    actions.append(self._build_action(ALL_IN))
     return actions
 
   def as_dict(self):

@@ -4,6 +4,8 @@ import json
 import random
 import time
 
+from server.deuces import Card, Evaluator
+
 PREFLOP = 'PREFLOP'
 FLOP = 'FLOP'
 TURN = 'TURN'
@@ -32,6 +34,7 @@ class Player:
     self.opened_cards = False
     self.place = None
     self.hand = []
+    self.probs = []
 
   @property
   def in_game(self):
@@ -53,6 +56,7 @@ class Player:
 
   def clear_street_info(self):
     self.any_moved = False
+    self.probs = []
 
   def clear_round_info(self):
     self.clear_street_info()
@@ -62,12 +66,16 @@ class Player:
 
   def as_dict(self, is_current):
     return {'name': self.name,
+            'probs': self.probs,
             'hand': self.hand,
             'chips': self.chips,
             'bet': self.bet,
             'is_fault': self.is_fault,
             'is_current': is_current,
             'place': self.place}
+  
+  def __str__(self):
+    return '%s %s+%s' % (self.name, self.chips, self.bet)
 
 
 class CardDeck:
@@ -84,14 +92,33 @@ class CardDeck:
 
 
 class Pot:
-  chips = 0
-  players = []
+  def __init__(self):
+    self.chips = 0
+    self.players = []
+    self.winners = []
 
   def add_player_bet(self, player, bet):
     bet = min(bet, player.bet)
     self.chips += bet
-    self.players.append(player)
     player.bet -= bet
+    if player.in_game:
+      self.players.append(player)
+
+  def add_winner(self, player):
+    self.winners.append(player)
+
+  def move_to_winners(self):
+    MIN_CHIP = 5
+    n = len(self.winners)
+    x = self.chips // MIN_CHIP
+    y = x // n
+    z = x % n
+    for i in range(n):
+      player = self.winners[i]
+      if i < z:
+        player.chips += (y + 1) * MIN_CHIP
+      else:
+        player.chips += y * MIN_CHIP
 
 
 class GameState:
@@ -106,6 +133,7 @@ class GameState:
     self.button_pos = len(players) - 1
     self.cur_player = 0
     self.blinds = (5, 10)
+    self.evaluator = Evaluator()
 
   @classmethod
   def create_new(cls, table):
@@ -195,10 +223,29 @@ class GameState:
 
   def _detect_winner(self):
     self._move_bets_to_pot()
-    #TODO move pot to winner
     self.state = END_ROUND
+    board = list(map(Card.new, self.board))
+    for player in self.players:
+      player.probs = []
+    for pot in self.pots:
+      vals = []
+      if len(pot.players) == 1:
+        vals = [-1]
+      else:
+        for player in pot.players:
+          hand = list(map(Card.new, player.hand))
+          vals.append(self.evaluator.evaluate(board, hand))
+      best_val = min(vals)
+      for player, val in zip(pot.players, vals):
+        if val == best_val:
+          player.probs.append(100.0)
+          pot.add_winner(player)
+        else:
+          player.probs.append(0.0)
 
   def _end_round(self):
+    for pot in self.pots:
+      pot.move_to_winners()
     self.state = None
     self.board = []
     self.pots = []

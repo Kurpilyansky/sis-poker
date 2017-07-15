@@ -4,7 +4,7 @@ import json
 import random
 import time
 
-from server.deuces import Card, Evaluator
+from server import deuces
 
 PREFLOP = 'PREFLOP'
 FLOP = 'FLOP'
@@ -64,7 +64,25 @@ class Player:
     self.opened_cards = False
     self.hand = []
 
-  def as_dict(self, is_current):
+  def evaluate_hand(self, evaluator, board):
+    if not self.hand:
+      return None
+    hand = list(map(deuces.Card.new, self.hand))
+    if not board:
+      if deuces.Card.get_rank_int(hand[0]) == deuces.Card.get_rank_int(hand[1]):
+        return deuces.LookupTable.MAX_PAIR
+      else:
+        return deuces.LookupTable.MAX_HIGH_CARD
+    board = list(map(deuces.Card.new, board))
+    return evaluator.evaluate(board, hand)
+
+  def as_dict(self, evaluator, board, is_current):
+    rank = self.evaluate_hand(evaluator, board)
+    if rank:
+      rank_class = evaluator.get_rank_class(rank)
+      class_string = evaluator.class_to_string(rank_class)
+    else:
+      class_string = None
     return {'name': self.name,
             'probs': self.probs,
             'hand': self.hand,
@@ -72,7 +90,8 @@ class Player:
             'bet': self.bet,
             'is_fault': self.is_fault,
             'is_current': is_current,
-            'place': self.place}
+            'place': self.place,
+            'combination': class_string}
   
   def __str__(self):
     return '%s %s+%s' % (self.name, self.chips, self.bet)
@@ -133,7 +152,7 @@ class GameState:
     self.button_pos = len(players) - 1
     self.cur_player = 0
     self.blinds = (5, 10)
-    self.evaluator = Evaluator()
+    self.evaluator = deuces.Evaluator()
 
   @classmethod
   def create_new(cls, table):
@@ -224,7 +243,6 @@ class GameState:
   def _detect_winner(self):
     self._move_bets_to_pot()
     self.state = END_ROUND
-    board = list(map(Card.new, self.board))
     for player in self.players:
       player.probs = []
     for pot in self.pots:
@@ -233,8 +251,7 @@ class GameState:
         vals = [-1]
       else:
         for player in pot.players:
-          hand = list(map(Card.new, player.hand))
-          vals.append(self.evaluator.evaluate(board, hand))
+          vals.append(player.evaluate_hand(self.evaluator, self.board))
       best_val = min(vals)
       for player, val in zip(pot.players, vals):
         if val == best_val:
@@ -281,7 +298,7 @@ class GameState:
     elif action_type == CALL or action_type == CHECK:
       self.players[self.cur_player].make_bet(self.cur_bet)
     elif action_type == RAISE or action_type == BET:
-      raise_bet = kwargs.get('raise_bet')
+      raise_bet = int(kwargs.get('raise_bet'))
       self.cur_bet += raise_bet
       self.players[self.cur_player].make_bet(self.cur_bet)
     elif action_type == ALL_IN:
@@ -300,8 +317,10 @@ class GameState:
       self._deal_cards()
 
   @classmethod
-  def _build_action(cls, action_type, action_text=None):
-    return {'type': action_type, 'text': action_text or action_type}
+  def _build_action(cls, action_type, action_text=None, args=None):
+    return {'type': action_type,
+            'text': action_text or action_type,
+            'args': args or []}
 
   def _get_actions(self):
     if self.state == None:
@@ -315,7 +334,7 @@ class GameState:
     player = self.players[self.cur_player]
     actions.append(self._build_action(FOLD))
     actions.append(self._build_action(CHECK if self.cur_bet == player.bet else CALL))
-    actions.append(self._build_action(BET if player.bet == 0 else RAISE))
+    actions.append(self._build_action(BET if self.cur_bet == 0 else RAISE, args=['raise_bet']))
     actions.append(self._build_action(ALL_IN))
     return actions
 
@@ -324,6 +343,9 @@ class GameState:
             'board': self.board,
             'pots': [pot.chips for pot in self.pots],
             'cur_bet': self.cur_bet,
-            'players': [p.as_dict(p.id == self.players[self.cur_player].id) for p in self.iter_players()],
+            'players': [p.as_dict(self.evaluator,
+                                  self.board,
+                                  p.id == self.players[self.cur_player].id)
+                        for p in self.iter_players()],
             'actions': self._get_actions()}
 

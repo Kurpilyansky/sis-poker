@@ -27,22 +27,35 @@
     console.log(data);
     $('#board').text(data.board.join(' '));
     $('#pot').text('Pot: ' + data.pots.join(', '));
-    player_divs = []
+    var player_divs = []
     for (var i = 0; i < data.players.length; ++i) {
       var p = data.players[i];
       player_divs.push('<div class="player ' + (p.is_current ? 'current' : '') + '">'
                        + p.name + ' ' + p.chips + '+' + p.bet + ': ' 
-                       + p.hand.join(' ') + ' probs ' + p.probs.join(' ') + '</div>');
+                       + p.hand.join(' ') + ' probs ' + p.probs.join(' ')
+                       + p.combination + '</div>');
     }
     $('#players').html(player_divs.join(''));
 
-    $actions_div = $('#actions')
+    var $actions_div = $('#actions')
     $actions_div.html('');
     data.actions.forEach(function(action) {
-          $action = $("<input/>").attr('type', 'submit').attr('value', action.text);// type='submit' value='" + action.text + "/>");
+          var $action = $("<input/>").attr('type', 'submit').attr('value', action.text);
           $actions_div.append($action);
+          var args_inputs = []
+          action.args.forEach(function(arg) {
+                var $arg = $("<input/>").attr('type', 'number').attr('name', arg);
+                args_inputs.push($arg);      
+                $actions_div.append($arg);
+              });
+          $actions_div.append($('<br/>'));
           $action.click(function () {
-                socket.emit('make_action', {'action_type': action.type});
+                var data = {'action_type': action.type}
+                args_inputs.forEach(function(arg_input) {
+                      data[arg_input.attr('name')] = arg_input.val();
+                    });
+                console.log(data)
+                socket.emit('make_action', data);
               });
         });
   });
@@ -51,10 +64,6 @@
         console.log('emit next_phase');
         socket.emit('next_phase');
       }, 2000);*/
-  $('#next_phase').click(function() {
-        console.log('emit next_phase');
-        socket.emit('next_phase');
-      });
 </script>
 </body>
 </html>

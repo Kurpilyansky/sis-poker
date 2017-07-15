@@ -11,3 +11,4 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 from .card import Card 
 from .deck import Deck 
 from .evaluator import Evaluator 
+from .lookup import LookupTable

@@ -32,12 +32,6 @@ def handle_make_action(*args):
   game_state.make_action(**(args[0]))
   broadcast_full_game_state()
 
-@socketio.on('next_phase')
-def handle_next_phase():
-  global game_state
-  game_state.deal_cards()
-  broadcast_full_game_state()
-
 def run_game_server(table_id):
   global game_state
   game_state = GameState.create_new(models.Table.objects.get(id=table_id))

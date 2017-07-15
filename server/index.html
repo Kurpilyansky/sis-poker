@@ -20,9 +20,6 @@
 
 <script type="text/javascript" charset="utf-8">
   var socket = io.connect('http://localhost:' + 5000);
-  socket.on('connect', function() {
-    socket.emit('get_full_state');
-  });
   socket.on('full_state', function(data) {
     console.log(data);
     $('#board').text(data.board.join(' '));

@@ -22,7 +22,7 @@ def broadcast_full_game_state():
   global game_state
   emit('full_state', game_state.as_dict(), json=True, broadcast=True)
 
-@socketio.on('get_full_state')
+@socketio.on('connect')
 def handle_get_full_state():
   send_full_game_state()
 

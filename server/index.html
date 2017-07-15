@@ -3,14 +3,15 @@
 <script type="text/javascript" src="socket.io.min.js"></script>
 <script type="text/javascript" src="jquery-3.2.1.min.js"></script>
 <style>
-  .button {
+  .player.current {
     background-color: lightyellow;
   }
 </style>
 
 </head>
 <body>
-  <input id="next_phase" type='button' value='Далее'/>
+  <div id='actions'>
+  </div>
   <div id='game'>
     <div id='board'></div>
     <div id='players'></div>
@@ -27,11 +28,21 @@
     player_divs = []
     for (var i = 0; i < data.players.length; ++i) {
       var p = data.players[i];
-      player_divs.push('<div class="player ' + (p.pos == data.button_pos ? 'button' : '') + '">'
+      player_divs.push('<div class="player ' + (p.is_current ? 'current' : '') + '">'
                        + p.name + ' ' + p.chips + ': ' 
                        + p.hand.join(' ') + '</div>');
     }
     $('#players').html(player_divs.join(''));
+
+    $actions_div = $('#actions')
+    $actions_div.html('');
+    data.actions.forEach(function(action) {
+          $action = $("<input/>").attr('type', 'submit').attr('value', action.text);// type='submit' value='" + action.text + "/>");
+          $actions_div.append($action);
+          $action.click(function () {
+                socket.emit('make_action', {'action_type': action.type});
+              });
+        });
   });
 
   /*setInterval(function () {

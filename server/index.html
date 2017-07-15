@@ -14,6 +14,7 @@
   </div>
   <div id='game'>
     <div id='board'></div>
+    <div id='pot'></div>
     <div id='players'></div>
   </div>
 
@@ -25,11 +26,12 @@
   socket.on('full_state', function(data) {
     console.log(data);
     $('#board').text(data.board.join(' '));
+    $('#pot').text('Pot: ' + data.pot);
     player_divs = []
     for (var i = 0; i < data.players.length; ++i) {
       var p = data.players[i];
       player_divs.push('<div class="player ' + (p.is_current ? 'current' : '') + '">'
-                       + p.name + ' ' + p.chips + ': ' 
+                       + p.name + ' ' + p.chips + '+' + p.bet + ': ' 
                        + p.hand.join(' ') + '</div>');
     }
     $('#players').html(player_divs.join(''));

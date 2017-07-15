@@ -46,16 +46,10 @@ class Player:
     self.any_moved = True
 
   def make_bet(self, bet, blind=False):
-    delta = bet - self.bet
+    delta = min(self.chips, bet - self.bet)
     self.bet += delta
     self.chips -= delta
     self.any_moved = not blind
-
-  def make_all_in(self):
-    delta = self.chips
-    self.bet += delta
-    self.chips -= delta
-    self.any_moved = True
 
   def clear_street_info(self):
     self.any_moved = False
@@ -70,6 +64,7 @@ class Player:
     return {'name': self.name,
             'hand': self.hand,
             'chips': self.chips,
+            'bet': self.bet,
             'is_fault': self.is_fault,
             'is_current': is_current,
             'place': self.place}
@@ -220,7 +215,7 @@ class GameState:
     elif action_type == ALL_IN:
       p = self.players[self.cur_player]
       self.cur_bet = max(self.cur_bet, p.chips + p.bet)
-      p.make_all_in()
+      p.make_bet(p.chips + p.bet)
     elif action_type == OPEN:
       self.players[self.cur_player].open_cards()
     else:

@@ -34,7 +34,7 @@ class Player:
     self.opened_cards = False
     self.place = None
     self.hand = []
-    self.probs = []
+    self.win_probs = []
 
   @property
   def in_game(self):
@@ -56,7 +56,7 @@ class Player:
 
   def clear_street_info(self):
     self.any_moved = False
-    self.probs = []
+    self.win_probs = []
 
   def clear_round_info(self):
     self.clear_street_info()
@@ -84,7 +84,7 @@ class Player:
     else:
       class_string = None
     return {'name': self.name,
-            'probs': self.probs,
+            'win_probs': self.win_probs,
             'hand': self.hand,
             'chips': self.chips,
             'bet': self.bet,
@@ -244,21 +244,22 @@ class GameState:
     self._move_bets_to_pot()
     self.state = END_ROUND
     for player in self.players:
-      player.probs = []
+      player.win_probs = []
     for pot in self.pots:
+      players = [p for p in pot.players if p.in_game]
       vals = []
-      if len(pot.players) == 1:
+      if len(players) == 1:
         vals = [-1]
       else:
-        for player in pot.players:
+        for player in players:
           vals.append(player.evaluate_hand(self.evaluator, self.board))
       best_val = min(vals)
-      for player, val in zip(pot.players, vals):
+      for player, val in zip(players, vals):
         if val == best_val:
-          player.probs.append(100.0)
+          player.win_probs.append(100.0)
           pot.add_winner(player)
         else:
-          player.probs.append(0.0)
+          player.win_probs.append(0.0)
 
   def _end_round(self):
     for pot in self.pots:

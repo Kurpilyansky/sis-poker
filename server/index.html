@@ -32,7 +32,7 @@
       var p = data.players[i];
       player_divs.push('<div class="player ' + (p.is_current ? 'current' : '') + '">'
                        + p.name + ' ' + p.chips + '+' + p.bet + ': ' 
-                       + p.hand.join(' ') + ' probs ' + p.probs.join(' ')
+                       + p.hand.join(' ') + ' win_probs ' + p.win_probs.join(' ')
                        + p.combination + '</div>');
     }
     $('#players').html(player_divs.join(''));

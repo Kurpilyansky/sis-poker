@@ -101,11 +101,11 @@ class Player:
 
 
 class CardDeck:
-  def __init__(self):
+  def __init__(self, model):
     self.offset = 0
-    #self.cards = model.cards.split()
-    self.cards = [val+suit for val in '23456789TJQKA' for suit in 'hdsc']
-    random.shuffle(self.cards)
+    self.cards = model.cards.split()
+    #self.cards = [val+suit for val in '23456789TJQKA' for suit in 'hdsc']
+    #random.shuffle(self.cards)
 
   def draw(self, count):
     res = self.cards[self.offset:self.offset + count]
@@ -145,8 +145,10 @@ class Pot:
 
 class GameState:
 
-  def __init__(self, players):
+  def __init__(self, table, players):
+    self.table = table
     self.state = None
+    self.cur_deck_id = -1
     self.deck = None
     self.pots = []
     self.cur_bet = 0
@@ -160,7 +162,10 @@ class GameState:
   @classmethod
   def create_new(cls, table):
     players = [Player(p.id, p.name, table.start_chips) for p in sorted(table.players, key=lambda p: p.table_place)]
-    return cls(players)
+    return cls(table, players)
+
+  def get_players_count(self):
+    return len([p for p in self.players if not p.place])
 
   def _move_bets_to_pot(self):
     if not self.pots:
@@ -220,7 +225,11 @@ class GameState:
 
   def _deal_cards(self):
     if self.state == None:
-      self.deck = CardDeck()
+      deck_model = self.table.get_next_deck(self.cur_deck_id)
+      if not deck_model:
+        return
+      self.cur_deck_id = deck_model.deck_id
+      self.deck = CardDeck(deck_model)
       self._start_new_street(PREFLOP)
       self.deck.draw(1)
       for i in range(2):
@@ -371,7 +380,8 @@ class GameState:
     return actions
 
   def as_dict(self):
-    return {'state': self.state,
+    return {'table_name': self.table.name,
+            'state': self.state,
             'board': self.board,
             'pots': [pot.chips for pot in self.pots],
             'cur_bet': self.cur_bet,

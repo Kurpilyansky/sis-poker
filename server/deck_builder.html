@@ -1,0 +1,106 @@
+<html>
+<head>
+<script type="text/javascript" src="socket.io.min.js"></script>
+<script type="text/javascript" src="jquery-3.2.1.min.js"></script>
+<style>
+  .card {
+    width: 50px;
+  }
+  .deck
+</style>
+
+</head>
+<body>
+  <div id='header'>
+  </div>
+  <div id='deck'>
+  </div>
+  <table id='keyboard'>
+  </table>
+
+<script type="text/javascript" charset="utf-8">
+  var socket = io.connect('http://localhost:' + 5000);
+  var deck_id = -1;
+  var deck = [];
+  var need_cards = 0;
+  var $deck = $('#deck');
+  function update_header() {
+    $('#header').text('Колода #' + deck_id + ', осталось ввести карт: ' + need_cards);
+  }
+  function add_card_to_deck(card) {
+    if (need_cards == 0) { return; }
+    if (deck.includes(card)) { return; }
+    deck.push(card);
+    need_cards -= 1;
+    $card = $('<span></span>');
+    $card.text(card);
+    $deck.append($card);
+    update_header();
+  }
+  function del_card_from_deck() {
+    if (deck.length) {
+      need_cards += 1;
+      deck.pop();
+      $deck.children().last().remove();
+      update_header();
+    }
+  }
+  var vals = '23456789TJQKA';
+  var suits = 'hdsc';
+  $keyboard = $('#keyboard');
+  for (var val = 0; val < 13; ++val) {
+    $row = $('<tr></tr>');
+    $keyboard.append($row);
+    for (var suit = 0; suit < 4; ++suit) {
+      $button = $('<td></td>');
+      $row.append($button);
+      var card = vals[val] + suits[suit];
+      $button.attr('class', 'card');
+      $button.attr('card', card);
+      $button.text(card);
+      $button.click(function(ev) {
+            add_card_to_deck($(ev.target).attr('card'));
+          });
+    }
+  }
+  {
+    $row = $('<tr></tr>');
+    $keyboard.append($row);
+    $cancel = $('<td></td>');
+    $row.append($cancel);
+    $cancel.text('backspace');
+    $cancel.click(function() {
+          del_card_from_deck();
+        });
+
+    $send = $('<td></td>');
+    $send.attr('colspan', 3);
+    $row.append($send);
+    $send.text('enter');
+    $send.click(function () {
+        socket.emit('add_deck', {'deck_id': deck_id,
+                                 'cards': deck.join(' ')});
+      });
+  }
+  socket.on('connect', function(data) {
+        console.log('connected');
+        socket.emit('add_deck');
+      });
+  socket.on('new_deck_info', function(data) {
+    console.log(data);
+    deck_id = data.new_deck_id;
+    need_cards = data.need_cards;
+    if (data.success) {
+      $('#deck').html('');
+      deck = [];
+    }
+    update_header();
+  });
+
+  /*setInterval(function () {
+        console.log('emit next_phase');
+        socket.emit('next_phase');
+      }, 2000);*/
+</script>
+</body>
+</html>

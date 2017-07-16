@@ -1,0 +1,140 @@
+<html>
+<head>
+    <script type="text/javascript" src="js/socket.io.min.js"></script>
+    <script type="text/javascript" src="js/jquery-3.2.1.min.js"></script>
+    <meta charset="utf8" />
+    <link href="style.css" rel="stylesheet" type="text/css" />
+    <style>
+        #header, #deck {
+            border: 1px solid black;
+            background-color: white;
+        }
+        td {
+            padding-right: 20px;
+        }
+    </style>
+
+</head>
+<body>
+<div id='header'>&nbsp;
+</div>
+<div id='deck'>&nbsp;
+</div>
+<table id='keyboard'>&nbsp;
+</table>
+
+<script type="text/javascript" charset="utf-8">
+    var socket = io.connect('http://localhost:' + 5000);
+    var deck_id = -1;
+    var deck = [];
+    var need_cards = 0;
+    var $deck = $('#deck');
+    function update_header() {
+        $('#header').text('Колода #' + deck_id + ', осталось ввести карт: ' + need_cards);
+    }
+    function add_card_to_deck(card) {
+        if (need_cards === 0) { return; }
+        if (deck.includes(card)) { return; }
+        deck.push(card);
+        need_cards -= 1;
+        $card = $('<span></span>');
+        suit_html = {
+            'c': '&clubs;',
+            's': '&spades;',
+            'h': '&hearts;',
+            'd': '&diams;'
+        };
+        $card.html(card[0] + suit_html[card[1]] + '&nbsp;');
+        if (card[1] === 'd' || card[1] === 'h') {
+            $card.attr('style', 'color: darkred;');
+        }
+        $deck.append($card);
+        update_header();
+        $('.card[card="'+card+'"]').addClass('checked');
+    }
+    function del_card_from_deck() {
+        if (deck.length) {
+            need_cards += 1;
+            var card = deck.pop();
+            $deck.children().last().remove();
+            update_header();
+            $('.card[card="'+card+'"]').removeClass('checked');
+        }
+    }
+    var vals = '23456789TJQKA';
+    var suits = 'hdsc';
+    $keyboard = $('#keyboard');
+    for (var val = 0; val < 13; ++val) {
+        $row = $('<tr></tr>');
+        $keyboard.append($row);
+        for (var suit = 0; suit < 4; ++suit) {
+            $button = $('<td></td>');
+            $row.append($button);
+            //var card = vals[val] + suits[suit];
+            var suit_html = {
+                'c': '&clubs;',
+                's': '&spades;',
+                'h': '&hearts;',
+                'd': '&diams;'
+            };
+            var card = '<div class="tdcard"><span>'+vals[val]+'</span><i>'+suit_html[suits[suit]]+'</i></div>';
+            $button.addClass('card');
+            $button.attr('card', vals[val] + suits[suit]);
+            $button.html(card);
+            if (suit < 2) {
+                $button.find('.tdcard').addClass('red');
+            } else {
+                $button.find('.tdcard').addClass('black');
+            }
+            $button.click(function(ev) {
+                var node = $(ev.target);
+                while (!node.attr('card')) {
+                    node = $(node.parent());
+                }
+                add_card_to_deck($(node).attr('card'));
+            });
+        }
+    }
+    {
+        $row = $('<tr></tr>');
+        $keyboard.append($row);
+        $cancel = $('<td></td>');
+        $row.append($cancel);
+        $cancel.html('<div class="tdcard"><span>&lt;</span></div>');
+        $cancel.click(function() {
+            del_card_from_deck();
+        });
+
+        $send = $('<td></td>');
+        $send.attr('colspan', 3);
+        $row.append($send);
+        $send.html('<div class="tdcard"><span>↵</span></div>');
+        $send.click(function () {
+            socket.emit('add_deck', {'deck_id': deck_id,
+                'cards': deck.join(' ')});
+        });
+    }
+    socket.on('connect', function(data) {
+        console.log('connected');
+        socket.emit('add_deck');
+    });
+    socket.on('new_deck_info', function(data) {
+        console.log(data);
+        deck_id = data.new_deck_id;
+        need_cards = data.need_cards;
+        if (data.success) {
+            $('#deck').html('&nbsp;');
+            deck = [];
+            $('.card').removeClass('checked');
+
+        }
+        update_header();
+    });
+
+    /*setInterval(function () {
+     console.log('emit next_phase');
+     socket.emit('next_phase');
+     }, 2000);*/
+</script>
+</body>
+</html>

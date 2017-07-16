@@ -32,6 +32,9 @@
         text += ' &ndash; ' + p.place + ' место'
       } else {
         text += ' ' + p.chips + ' + ' + p.bet;
+        if (p.status) {
+          text += ' ' + p.status;
+        }
         if (p.hand.length) {
           text += ': ' + p.hand.join(' ');
         }

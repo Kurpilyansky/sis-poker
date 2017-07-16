@@ -61,5 +61,5 @@ def handle_add_deck(kwargs = None):
 def run_game_server(table_id):
   global game_state
   game_state = GameState.create_new(models.Table.objects.get(id=table_id))
-  socketio.run(app)
+  socketio.run(app, host='0.0.0.0')
 

@@ -37,6 +37,7 @@ class Player:
     self.place = None
     self.hand = []
     self.win_probs = []
+    self.status = ''
 
   @property
   def in_game(self):
@@ -45,20 +46,29 @@ class Player:
   def fold(self):
     self.is_fault = True
     self.any_moved = True
+    self.status = 'Fold'
 
   def open_cards(self):
     self.opened_cards = True
     self.any_moved = True
+    self.status = 'Open cards'
 
-  def make_bet(self, bet, blind=False):
+  def make_bet(self, bet, action_text, blind=False):
     delta = min(self.chips, bet - self.bet)
     self.bet += delta
     self.chips -= delta
     self.any_moved = not blind
+    self.status = action_text
 
   def clear_street_info(self):
     self.any_moved = False
     self.win_probs = []
+    if self.place:
+      self.status = ''
+    elif self.chips == 0:
+      self.status = 'All-in'
+    else:
+      self.status = ''
 
   def clear_round_info(self):
     self.clear_street_info()
@@ -91,8 +101,10 @@ class Player:
             'hand': self.hand,
             'chips': self.chips,
             'bet': self.bet,
+            'opened_cards': self.opened_cards,
             'is_fault': self.is_fault,
             'is_current': is_current,
+            'status': self.status,
             'place': self.place,
             'combination': class_string}
   
@@ -204,7 +216,6 @@ class GameState:
       i = (i + 1) % n
       if self.players[i].in_game and self.players[i].chips > 0:
         break
-      # fix infinite loop for all in all-in
       if iters > 2 * n:
         return False
     self.cur_player = i
@@ -235,11 +246,13 @@ class GameState:
       for i in range(2):
         for p in self.iter_players():
           p.hand += self.deck.draw(1)
+      self.players[self.button_pos].status = 'Dealer'
       players_count = len([p for p in self.players if not p.place])
       if players_count == 2:
         self._find_next_player()  #Head's up
       for i in range(2):
-        self.players[self.cur_player].make_bet(self.blinds[i], blind=True)
+        action_text = ('SB: ' if i == 0 else 'BB: ') + str(self.blinds[i])
+        self.players[self.cur_player].make_bet(self.blinds[i], action_text, blind=True)
         self._find_next_player()
       self.cur_bet = self.blinds[1]
     elif self.state == PREFLOP:
@@ -264,6 +277,7 @@ class GameState:
   def _detect_winner(self):
     self._move_bets_to_pot()
     self.state = END_ROUND
+    self.cur_player = None
     for player in self.players:
       player.win_probs = []
     for pot in self.pots:
@@ -289,11 +303,8 @@ class GameState:
     self.board = []
     self.pots = []
 
-    new_losers = []
     last_place = len([p for p in self.players if not p.place])
-    for p in self.players:
-      if p.chips == 0 and not p.place:
-        new_losers.append(p)
+    new_losers = [p for p in self.players if p.chips == 0 and not p.place]
     new_losers.sort(key=lambda p: p.chips_on_round_start)
     for p in new_losers:
       p.place = last_place
@@ -310,6 +321,7 @@ class GameState:
     self.cur_player = self.button_pos
     self._find_next_player()
     self.button_pos = self.cur_player
+    self.cur_player = None
 
   def _all_in_all_in(self):
     while self.state != END_ROUND:
@@ -334,18 +346,38 @@ class GameState:
       if self._check_one_player_in_game():
         self._detect_winner()
         return
-    elif action_type == CALL or action_type == CHECK:
-      self.players[self.cur_player].make_bet(self.cur_bet)
-    elif action_type == RAISE or action_type == BET:
-      raise_bet = int(kwargs.get('raise_bet'))
-      self.cur_bet += raise_bet
-      self.players[self.cur_player].make_bet(self.cur_bet)
-    elif action_type == ALL_IN:
-      p = self.players[self.cur_player]
-      self.cur_bet = max(self.cur_bet, p.chips + p.bet)
-      p.make_bet(p.chips + p.bet)
     elif action_type == OPEN:
       self.players[self.cur_player].open_cards()
+    elif action_type in [CALL, CHECK, RAISE, BET, ALL_IN]:
+      p = self.players[self.cur_player]
+      if action_type == RAISE or action_type == BET:
+        raise_bet = int(kwargs.get('raise_bet'))
+        new_bet = self.cur_bet + raise_bet
+      elif action_type == ALL_IN:
+        new_bet = p.chips + p.bet
+      else:
+        new_bet = self.cur_bet
+
+      new_bet = min(new_bet, p.chips + p.bet)
+
+      if p.bet == new_bet:
+        action_type = CHECK
+        action_text = 'Check'
+      elif new_bet <= self.cur_bet:
+        action_type = CALL
+        action_text = 'Call'
+      elif new_bet == p.chips + p.bet:
+        action_type = ALL_IN
+        action_text = 'All-in'
+      elif self.cur_bet == 0:
+        action_type = BET
+        action_text = 'Bet: %d' % new_bet
+      else:
+        action_type = RAISE
+        action_text = 'Raise: %d' % (new_bet - self.cur_bet)
+      
+      p.make_bet(new_bet, action_text)
+      self.cur_bet = max(self.cur_bet, new_bet)
     else:
       return
     if not self._find_next_player():
@@ -387,7 +419,7 @@ class GameState:
             'cur_bet': self.cur_bet,
             'players': [p.as_dict(self.evaluator,
                                   self.board,
-                                  p.id == self.players[self.cur_player].id)
+                                  self.cur_player is not None and p.id == self.players[self.cur_player].id)
                         for p in self.iter_players(True)],
             'actions': self._get_actions()}
 

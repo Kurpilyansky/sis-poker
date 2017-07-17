@@ -25,6 +25,7 @@ ALL_IN = 'ALL_IN'
 
 CANCEL_ROUND = 'CANCEL_ROUND'
 INCREASE_BLINDS = 'INCREASE_BLINDS'
+HARDCORE_SET = 'HARDCORE_SET'
 
 
 class Player:
@@ -313,13 +314,7 @@ class GameState:
         else:
           player.win_probs.append(0.0)
 
-  def _end_round(self):
-    for pot in self.pots:
-      pot.move_to_winners()
-    self.state = None
-    self.board = []
-    self.pots = []
-
+  def _set_losers(self):
     last_place = len([p for p in self.players if not p.place])
     new_losers = [p for p in self.players if p.chips == 0 and not p.place]
     new_losers.sort(key=lambda p: p.chips_on_round_start)
@@ -331,6 +326,18 @@ class GameState:
       winner = [p for p in self.players if not p.place][0]
       winner.place = 1
       self.state = END_GAME
+      return True
+    return False
+
+
+  def _end_round(self):
+    for pot in self.pots:
+      pot.move_to_winners()
+    self.state = None
+    self.board = []
+    self.pots = []
+
+    if self._set_losers():
       return
 
     for p in self.iter_players():
@@ -384,7 +391,18 @@ class GameState:
       return
     action_type = event.event_type
     kwargs = json.loads(event.args)
-    if action_type == CANCEL_ROUND:
+    if action_type == HARDCORE_SET:
+      data = kwargs.get('data')
+      arr = list(map(int, data.split()))
+      if len(arr) != self.get_players_count() + 1:
+        event.is_canceled = True
+        event.save()
+        return
+      self.button_pos = arr[0]
+      for kvp in zip(arr[1:], [p for p in self.players if p.in_game]):
+        kvp[1].chips = kvp[0]
+      self._set_losers()
+    elif action_type == CANCEL_ROUND:
       models.GameEvent.objects.filter(table_id=self.table.id,
                                deck_id=self.cur_deck_id).update(is_canceled=True)
       models.CardDeck.objects.filter(deck_id=self.cur_deck_id).update(is_canceled=True)
@@ -393,7 +411,10 @@ class GameState:
       return
     if action_type == START:
       if self.state == None:
-        self._deal_cards()
+        if not self._deal_cards():
+          event.is_canceled = True
+          event.save()
+          return
       return
     elif action_type == END_ROUND:
       self._end_round()
@@ -477,7 +498,8 @@ class GameState:
 
   def _get_special_actions(self):
     return [self._build_action(INCREASE_BLINDS, 'Повысить блайнды до %s' % '/'.join(map(str, self._get_next_blinds()))),
-            self._build_action(CANCEL_ROUND, 'Отменить текущую раздачу')]
+            self._build_action(CANCEL_ROUND, 'Отменить текущую раздачу'),
+            self._build_action(HARDCORE_SET, 'Засетить по хардкору все-все-все', args=['data'])]
 
   def as_dict(self):
     return {'table_name': self.table.name,

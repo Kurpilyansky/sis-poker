@@ -58,7 +58,7 @@
             $actions_div.append($action);
             var args_inputs = []
             action.args.forEach(function(arg) {
-                  var $arg = $("<input/>").attr('type', 'number').attr('name', arg);
+                  var $arg = $("<input/>").attr('name', arg);
                   args_inputs.push($arg);      
                   $actions_div.append($arg);
                 });

@@ -23,6 +23,8 @@ BET = 'BET'
 RAISE = 'RAISE'
 ALL_IN = 'ALL_IN'
 
+INCREASE_BLINDS = 'INCREASE_BLINDS'
+
 
 class Player:
   def __init__(self, player_id, name, chips):
@@ -345,7 +347,25 @@ class GameState:
         count += 1
     return count == 1
 
+  def _get_next_blinds(self):
+    """
+      5/10
+      10/20
+      15/30
+      25/50
+      *2...
+    """
+    if self.blinds[0] == 10:
+      return (15, 30)
+    elif self.blinds[0] == 15:
+      return (25, 50)
+    else:
+      return (self.blinds[0] * 2, self.blinds[1] * 2)
+
   def make_action(self, action_type, **kwargs):
+    if action_type == INCREASE_BLINDS:
+      self.blinds = self._get_next_blinds()
+      return
     if action_type == START:
       self._deal_cards()
       return
@@ -429,15 +449,20 @@ class GameState:
     actions.append(self._build_action(ALL_IN))
     return actions
 
+  def _get_special_actions(self):
+    return [self._build_action(INCREASE_BLINDS, 'Повысить блайнды до %s' % '/'.join(map(str, self._get_next_blinds())))]
+
   def as_dict(self):
     return {'table_name': self.table.name,
             'state': self.state,
             'board': self.board,
             'pots': [pot.chips for pot in self.pots],
             'cur_bet': self.cur_bet,
+            'blinds': self.blinds,
             'players': [p.as_dict(self.evaluator,
                                   self.board,
                                   self.cur_player is not None and p.id == self.players[self.cur_player].id)
                         for p in self.iter_players(True)],
-            'actions': self._get_actions()}
+            'actions': self._get_actions(),
+            'special_actions': self._get_special_actions()}
 

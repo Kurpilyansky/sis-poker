@@ -17,7 +17,8 @@ class Table(models.Model):
 
   def get_next_deck(self, last_deck_id=-1):
     card_deck = CardDeck.objects.filter(table_id=self.id,
-                                        deck_id__gt=last_deck_id) \
+                                        deck_id__gt=last_deck_id,
+                                        is_canceled=False) \
                                 .order_by('deck_id').first()
     return card_deck
 
@@ -26,12 +27,6 @@ class Table(models.Model):
     if event:
       return event.event_id + 1
     return 0
-
-  def get_next_event(self, last_event_id=-1):
-    event = GameEvent.objects.filter(table_id=self.id,
-                                     event_id__gt=last_event_id) \
-                             .order_by('event_id').first()
-    return event
 
   def __str__(self):
     return self.name
@@ -47,6 +42,8 @@ class CardDeck(models.Model):
   table = models.ForeignKey(Table, null=True)
   deck_id = models.IntegerField()
   cards = models.CharField(max_length=500)
+  
+  is_canceled = models.BooleanField(default=False)
 
 
 class GameEvent(models.Model):
@@ -58,5 +55,7 @@ class GameEvent(models.Model):
   event_id = models.IntegerField()
   event_type = models.CharField(max_length=500)
   args = models.CharField(max_length=2000)
+
+  is_canceled = models.BooleanField(default=False)
 
 

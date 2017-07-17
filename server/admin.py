@@ -42,6 +42,7 @@ class CardDeckAdmin(VersionAdmin):
         'id',
         'deck_id',
         'table',
+        'is_canceled'
     )
 
     list_filter = (
@@ -58,7 +59,8 @@ class GameEventAdmin(VersionAdmin):
         'event_id',
         'player_name',
         'deck_id',
-        'event_type'
+        'event_type',
+        'is_canceled'
     )
 
     list_filter = (

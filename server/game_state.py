@@ -23,6 +23,7 @@ BET = 'BET'
 RAISE = 'RAISE'
 ALL_IN = 'ALL_IN'
 
+CANCEL_ROUND = 'CANCEL_ROUND'
 INCREASE_BLINDS = 'INCREASE_BLINDS'
 
 
@@ -379,9 +380,15 @@ class GameState:
     self._process_action(new_event)
 
   def _process_action(self, event):
+    if event.is_canceled:
+      return
     action_type = event.event_type
     kwargs = json.loads(event.args)
-    if action_type == INCREASE_BLINDS:
+    if action_type == CANCEL_ROUND:
+      models.GameEvent.objects.filter(table_id=self.table.id,
+                               deck_id=self.cur_deck_id).update(is_canceled=True)
+      models.CardDeck.objects.filter(deck_id=self.cur_deck_id).update(is_canceled=True)
+    elif action_type == INCREASE_BLINDS:
       self.blinds = self._get_next_blinds()
       return
     if action_type == START:
@@ -469,7 +476,8 @@ class GameState:
     return actions
 
   def _get_special_actions(self):
-    return [self._build_action(INCREASE_BLINDS, 'Повысить блайнды до %s' % '/'.join(map(str, self._get_next_blinds())))]
+    return [self._build_action(INCREASE_BLINDS, 'Повысить блайнды до %s' % '/'.join(map(str, self._get_next_blinds()))),
+            self._build_action(CANCEL_ROUND, 'Отменить текущую раздачу')]
 
   def as_dict(self):
     return {'table_name': self.table.name,

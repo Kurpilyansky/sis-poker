@@ -170,6 +170,8 @@ class GameState:
     self.cur_player = 0
     self.blinds = (5, 10)
     self.evaluator = deuces.Evaluator()
+    self.all_in_players = []
+    self.called_players = []
 
   @classmethod
   def create_new(cls, table):
@@ -206,8 +208,15 @@ class GameState:
       p.clear_street_info()
     self.cur_player = self.button_pos
     self._find_next_player()
+    self.called_players = []
   
   def _find_next_player(self):
+    if self.state == SHOWDOWN:
+      if not self.showdown_players:
+        return False
+      p = self.showdown_players.pop()
+      self.cur_player = [i for i in range(len(self.players)) if self.players[i].id == p.id][0]  #TODO refactor
+      return True
     iters = 0
     n = len(self.players)
     i = self.cur_player
@@ -268,6 +277,7 @@ class GameState:
       self.deck.draw(1)
       self.board += self.deck.draw(1)
     elif self.state == RIVER:
+      self.showdown_players = list((self.all_in_players + self.called_players)[::-1])
       self._start_new_street(SHOWDOWN)
     elif self.state == SHOWDOWN:
       self._detect_winner()
@@ -322,6 +332,7 @@ class GameState:
     self._find_next_player()
     self.button_pos = self.cur_player
     self.cur_player = None
+    self.all_in_players = []
 
   def _all_in_all_in(self):
     while self.state != END_ROUND:
@@ -369,15 +380,22 @@ class GameState:
       elif new_bet == p.chips + p.bet:
         action_type = ALL_IN
         action_text = 'All-in'
-      elif self.cur_bet == 0:
-        action_type = BET
-        action_text = 'Bet: %d' % new_bet
       else:
-        action_type = RAISE
-        action_text = 'Raise: %d' % (new_bet - self.cur_bet)
+        self.called_players = []
+        if self.cur_bet == 0:
+          action_type = BET
+          action_text = 'Bet: %d' % new_bet
+        else:
+          action_type = RAISE
+          action_text = 'Raise: %d' % (new_bet - self.cur_bet)
       
       p.make_bet(new_bet, action_text)
       self.cur_bet = max(self.cur_bet, new_bet)
+      if p.chips == 0:
+        self.all_in_players.append(p)
+      else:
+        self.called_players.append(p)
+      
     else:
       return
     if not self._find_next_player():

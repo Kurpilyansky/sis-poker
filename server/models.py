@@ -21,6 +21,18 @@ class Table(models.Model):
                                 .order_by('deck_id').first()
     return card_deck
 
+  def get_new_event_id(self):
+    event = GameEvent.objects.filter(table_id=self.id).order_by('-event_id').first()
+    if event:
+      return event.event_id + 1
+    return 0
+
+  def get_next_event(self, last_event_id=-1):
+    event = GameEvent.objects.filter(table_id=self.id,
+                                     event_id__gt=last_event_id) \
+                             .order_by('event_id').first()
+    return event
+
   def __str__(self):
     return self.name
 
@@ -35,4 +47,16 @@ class CardDeck(models.Model):
   table = models.ForeignKey(Table, null=True)
   deck_id = models.IntegerField()
   cards = models.CharField(max_length=500)
+
+
+class GameEvent(models.Model):
+  table = models.ForeignKey(Table)
+  deck_id = models.IntegerField()
+  player_id = models.IntegerField(null=True, blank=True)
+  player_name = models.CharField(max_length=100, null=True, blank=True)
+
+  event_id = models.IntegerField()
+  event_type = models.CharField(max_length=500)
+  args = models.CharField(max_length=2000)
+
 

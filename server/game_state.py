@@ -178,7 +178,11 @@ class GameState:
   @classmethod
   def create_new(cls, table):
     players = [Player(p.id, p.name, table.start_chips) for p in sorted(table.players, key=lambda p: p.table_place)]
-    return cls(table, players)
+    game_state = cls(table, players)
+    events = list(models.GameEvent.objects.filter(table_id=table.id).order_by('event_id').all())
+    for ev in events:
+      game_state._process_action(ev)
+    return game_state
 
   def get_players_count(self):
     return len([p for p in self.players if not p.place])
@@ -363,11 +367,26 @@ class GameState:
       return (self.blinds[0] * 2, self.blinds[1] * 2)
 
   def make_action(self, action_type, **kwargs):
+    new_event = models.GameEvent(table=self.table,
+                          deck_id=self.cur_deck_id,
+                          event_id=self.table.get_new_event_id(),
+                          event_type=action_type,
+                          args=json.dumps(kwargs))
+    if action_type in [FOLD, OPEN, CALL, CHECK, RAISE, BET, ALL_IN]:
+      new_event.player_id = self.players[self.cur_player].id
+      new_event.player_name = self.players[self.cur_player].name
+    new_event.save()
+    self._process_action(new_event)
+
+  def _process_action(self, event):
+    action_type = event.event_type
+    kwargs = json.loads(event.args)
     if action_type == INCREASE_BLINDS:
       self.blinds = self._get_next_blinds()
       return
     if action_type == START:
-      self._deal_cards()
+      if self.state == None:
+        self._deal_cards()
       return
     elif action_type == END_ROUND:
       self._end_round()

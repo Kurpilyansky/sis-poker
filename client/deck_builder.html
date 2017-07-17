@@ -27,16 +27,15 @@
     var socket = io.connect('http://localhost:' + 5000);
     var deck_id = -1;
     var deck = [];
-    var need_cards = 0;
+    var need_cards = 100;
     var $deck = $('#deck');
     function update_header() {
-        $('#header').text('Колода #' + deck_id + ', осталось ввести карт: ' + need_cards);
+        $('#header').text('Колода #' + deck_id + ', осталось ввести карт: ' + (need_cards - deck.length));
     }
     function add_card_to_deck(card) {
-        if (need_cards === 0) { return; }
+        if (need_cards === deck.length) { return; }
         if (deck.includes(card)) { return; }
         deck.push(card);
-        need_cards -= 1;
         $card = $('<span></span>');
         suit_html = {
             'c': '&clubs;',
@@ -54,7 +53,6 @@
     }
     function del_card_from_deck() {
         if (deck.length) {
-            need_cards += 1;
             var card = deck.pop();
             $deck.children().last().remove();
             update_header();
@@ -110,8 +108,10 @@
         $row.append($send);
         $send.html('<div class="tdcard"><span>↵</span></div>');
         $send.click(function () {
-            socket.emit('add_deck', {'deck_id': deck_id,
-                'cards': deck.join(' ')});
+            if (need_cards == deck.length) {
+              socket.emit('add_deck', {'deck_id': deck_id,
+                  'cards': deck.join(' ')});
+            }
         });
     }
     socket.on('connect', function(data) {

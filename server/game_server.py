@@ -39,7 +39,7 @@ def handle_add_deck(kwargs = None):
   cards = kwargs.get('cards')
   response_text = None
   success = False
-  if deck_id and cards:
+  if deck_id is not None and cards:
     table = game_state.table
     if table.get_new_deck_id() == deck_id:
       deck = models.CardDeck(deck_id=deck_id,

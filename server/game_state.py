@@ -158,6 +158,9 @@ class Pot:
       else:
         player.chips += y * MIN_CHIP
 
+  def __str__(self):
+    return 'chips %d, players %s, winners %s' % (self.chips, str(list(map(str, self.players))), str(list(map(str, self.winners))))
+
 
 class GameState:
 
@@ -171,6 +174,7 @@ class GameState:
     self.board = []
     self.players = players
     self.button_pos = len(players) - 1
+    self.blinds_pos = [0, 1]
     self.cur_player = 0
     self.blinds = (5, 10)
     self.evaluator = deuces.Evaluator()
@@ -214,8 +218,10 @@ class GameState:
     self.cur_bet = 0
     for p in self.iter_players():
       p.clear_street_info()
-    self.cur_player = self.button_pos
-    self._find_next_player()
+    if self.state == SHOWDOWN:
+      self._find_next_player()  # TODO refactor
+    else:
+      self.cur_player = self.blinds_pos[0]
     self.called_players = []
   
   def _find_next_player(self):
@@ -241,7 +247,7 @@ class GameState:
   def iter_players(self, include_losers=False):
     n = len(self.players)
     for i in range(n):
-      j = (i + self.button_pos + 1) % n
+      j = (i + self.blinds_pos[0]) % n
       if not self.players[j].place:
         yield self.players[j]
     if include_losers:
@@ -252,10 +258,11 @@ class GameState:
           yield player
 
   def _deal_cards(self):
+    print('deal cards in state ' + str(self.state))
     if self.state == None:
       deck_model = self.table.get_next_deck(self.cur_deck_id)
       if not deck_model:
-        return
+        return False
       self.cur_deck_id = deck_model.deck_id
       self.deck = CardDeck(deck_model)
       self._start_new_street(PREFLOP)
@@ -265,12 +272,14 @@ class GameState:
           p.hand += self.deck.draw(1)
       self.players[self.button_pos].status = 'Dealer'
       players_count = len([p for p in self.players if not p.place])
-      if players_count == 2:
-        self._find_next_player()  #Head's up
-      for i in range(2):
-        action_text = ('SB: ' if i == 0 else 'BB: ') + str(self.blinds[i])
-        self.players[self.cur_player].make_bet(self.blinds[i], action_text, blind=True)
+      print('button_pos %d, blinds_pos (%d, %d)' % (self.button_pos, self.blinds_pos[0], self.blinds_pos[1]))
+      #if players_count == 2:
+      #  self._find_next_player()  #Head's up
+      if self.blinds_pos[0] != self.blinds_pos[1]:
+        self.players[self.blinds_pos[0]].make_bet(self.blinds[0], 'SB: %d' % self.blinds[0], blind=True)
         self._find_next_player()
+      self.players[self.blinds_pos[1]].make_bet(self.blinds[1], 'BB: %d' % self.blinds[1], blind=True)
+      self._find_next_player()
       self.cur_bet = self.blinds[1]
     elif self.state == PREFLOP:
       self._start_new_street(FLOP)
@@ -286,11 +295,13 @@ class GameState:
       self.board += self.deck.draw(1)
     elif self.state == RIVER:
       self.showdown_players = list((self.all_in_players + self.called_players)[::-1])
+      print(list(map(str, self.showdown_players)))
       self._start_new_street(SHOWDOWN)
     elif self.state == SHOWDOWN:
       self._detect_winner()
     else:
       raise ValueError('unknown self.state ' + self.state)
+    return True
 
   def _detect_winner(self):
     self._move_bets_to_pot()
@@ -330,8 +341,18 @@ class GameState:
     return False
 
 
+  def _get_next_pos(self, pos):
+    backup_val = self.cur_player  #TODO refactor
+    self.cur_player = pos
+    self._find_next_player()
+    pos = self.cur_player
+    self.cur_player = backup_val
+    return pos
+
+
   def _end_round(self):
     for pot in self.pots:
+      print(pot)
       pot.move_to_winners()
     self.state = None
     self.board = []
@@ -342,13 +363,18 @@ class GameState:
 
     for p in self.iter_players():
       p.clear_round_info()
-    self.cur_player = self.button_pos
-    self._find_next_player()
-    self.button_pos = self.cur_player
+    if self.button_pos != self.blinds_pos[0]:
+      self.button_pos = self._get_next_pos(self.button_pos)
+    if self.blinds_pos[0] != self.blinds_pos[1]:
+      self.blinds_pos[0] = self._get_next_pos(self.blinds_pos[0])
+    self.blinds_pos[1] = self._get_next_pos(self.blinds_pos[1])
     self.cur_player = None
     self.all_in_players = []
 
   def _all_in_all_in(self):
+    for p in self.players:
+      if p.in_game:
+        p.open_cards()
     while self.state != END_ROUND:
       self._deal_cards()
 
@@ -391,6 +417,7 @@ class GameState:
       return
     action_type = event.event_type
     kwargs = json.loads(event.args)
+    print(self.cur_player, action_type, kwargs)
     if action_type == HARDCORE_SET:
       data = kwargs.get('data')
       arr = list(map(int, data.split()))

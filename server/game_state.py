@@ -160,6 +160,9 @@ class Pot:
   def add_winner(self, player):
     self.winners.append(player)
 
+  def keep_players_in_game(self):
+    self.players = list(filter(lambda p: p.in_game, self.players))
+
   def move_to_winners(self):
     MIN_CHIP = 5
     n = len(self.winners)
@@ -209,18 +212,16 @@ class GameState:
     return len([p for p in self.players if not p.place])
 
   def _move_bets_to_pot(self):
-    if not self.pots:
-      self.pots = [Pot()]
-    first = True
     while True:
       bets = [p.bet for p in self.iter_players() if p.in_game and p.bet > 0]
       if not bets:
         break
-      if not first:
+      if not self.pots:
         self.pots.append(Pot())
       else:
-        self.pots[-1].players = []
-      first = False
+        self.pots[-1].keep_players_in_game()
+        if len(self.pots[-1].players) != len(bets):
+          self.pots.append(Pot())
       min_bet = min(bets)
       for p in self.iter_players():
         if p.bet > 0:
@@ -288,6 +289,7 @@ class GameState:
       self.players[self.button_pos].status = 'Dealer'
       players_count = len([p for p in self.players if not p.place])
       print('button_pos %d, blinds_pos (%d, %d)' % (self.button_pos, self.blinds_pos[0], self.blinds_pos[1]))
+      print(list(map(str, self.players)))
       #if players_count == 2:
       #  self._find_next_player()  #Head's up
       if self.blinds_pos[0] != self.blinds_pos[1]:

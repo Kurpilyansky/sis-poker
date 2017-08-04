@@ -22,6 +22,11 @@ class Table(models.Model):
                                 .order_by('deck_id').first()
     return card_deck
 
+  def get_last_event(self):
+    return GameEvent.objects.filter(table_id=self.id,
+                                    is_canceled=False) \
+                            .order_by('-event_id').first()
+
   def get_new_event_id(self):
     event = GameEvent.objects.filter(table_id=self.id).order_by('-event_id').first()
     if event:
@@ -59,4 +64,8 @@ class GameEvent(models.Model):
 
   is_canceled = models.BooleanField(default=False)
 
+  def __str__(self):
+    return '#%d %s' % (self.id, self.get_text())
 
+  def get_text(self):
+    return '%s %s %s' % (self.player_name, self.event_type, self.args)

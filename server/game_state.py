@@ -27,6 +27,7 @@ CANCEL_ROUND = 'CANCEL_ROUND'
 INCREASE_BLINDS = 'INCREASE_BLINDS'
 HARDCORE_SET = 'HARDCORE_SET'
 SET_DEALER_ERROR = 'SET_DEALER_ERROR'
+CANCEL_LAST_ACTION = 'CANCEL_LAST_ACTION'
 
 
 class Player:
@@ -436,7 +437,15 @@ class GameState:
     action_type = event.event_type
     kwargs = json.loads(event.args)
     print(self.cur_player, action_type, kwargs)
-    if action_type == SET_DEALER_ERROR:
+    if action_type == CANCEL_LAST_ACTION:
+      event.is_canceled = True
+      event.save()
+      last_event = self.table.get_last_event()
+      if last_event:
+        last_event.is_canceled = True
+        last_event.save()
+      return True
+    elif action_type == SET_DEALER_ERROR:
       dealer_error = kwargs.get('mask', None)
       if self.deck and dealer_error is not None:
         self.deck.set_dealer_error(dealer_error)
@@ -446,13 +455,17 @@ class GameState:
     elif action_type == HARDCORE_SET:
       data = kwargs.get('data')
       arr = list(map(int, data.split()))
-      if len(arr) != self.get_players_count() + 1:
+      if len(arr) != len(self.players) + 3 or self.state is not None:
         event.is_canceled = True
         event.save()
         return
       self.button_pos = arr[0]
-      for kvp in zip(arr[1:], [p for p in self.players if p.in_game]):
-        kvp[1].chips = kvp[0]
+      self.blinds_pos = list(arr[1:3])
+      for kvp in zip(arr[3:], self.players):
+        if kvp[0] > 0:
+          kvp[1].chips = kvp[0]
+        else:
+          kvp[1].place = -kvp[0]
       self._set_losers()
       return True
     elif action_type == CANCEL_ROUND:
@@ -551,10 +564,14 @@ class GameState:
     return actions
 
   def _get_special_actions(self):
-    return [self._build_action(INCREASE_BLINDS, 'Повысить блайнды до %s' % '/'.join(map(str, self._get_next_blinds()))),
-            self._build_action(CANCEL_ROUND, 'Отменить текущую раздачу'),
-            self._build_action(HARDCORE_SET, 'Засетить по хардкору все-все-все', args=['data']),
-            self._build_action(SET_DEALER_ERROR, 'Ошибка крупье', args=['mask'])]
+    last_event = self.table.get_last_event()
+    actions = [self._build_action(INCREASE_BLINDS, 'Повысить блайнды до %s' % '/'.join(map(str, self._get_next_blinds()))),
+               self._build_action(CANCEL_ROUND, 'Отменить текущую раздачу'),
+               self._build_action(SET_DEALER_ERROR, 'Ошибка крупье', args=['mask']),
+               self._build_action(HARDCORE_SET, 'Засетить по хардкору все-все-все', args=['data'])]
+    if last_event:
+      actions.append(self._build_action(CANCEL_LAST_ACTION, 'Отменить последнее действие: %s' % last_event.get_text()))
+    return actions
 
   def as_dict(self):
     return {'table_name': self.table.name,

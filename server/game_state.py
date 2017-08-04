@@ -26,6 +26,7 @@ ALL_IN = 'ALL_IN'
 CANCEL_ROUND = 'CANCEL_ROUND'
 INCREASE_BLINDS = 'INCREASE_BLINDS'
 HARDCORE_SET = 'HARDCORE_SET'
+SET_DEALER_ERROR = 'SET_DEALER_ERROR'
 
 
 class Player:
@@ -118,15 +119,29 @@ class Player:
 
 class CardDeck:
   def __init__(self, model):
+    self._model = model
     self.offset = 0
+    self.dealer_error = model.dealer_error
     self.cards = model.cards.split()
     #self.cards = [val+suit for val in '23456789TJQKA' for suit in 'hdsc']
     #random.shuffle(self.cards)
+
+  def set_dealer_error(self, dealer_error):
+    self._model.dealer_error = dealer_error
+    self._model.save()
 
   def draw(self, count):
     res = self.cards[self.offset:self.offset + count]
     self.offset += count
     return res
+
+  def burn_card(self):
+    error = self.dealer_error & 1
+    self.dealer_error >>= 1
+    if error == 0:
+      self.draw(1)
+    else:
+      print('skip burning card')
 
 
 class Pot:
@@ -266,7 +281,7 @@ class GameState:
       self.cur_deck_id = deck_model.deck_id
       self.deck = CardDeck(deck_model)
       self._start_new_street(PREFLOP)
-      self.deck.draw(1)
+      self.deck.burn_card()
       for i in range(2):
         for p in self.iter_players():
           p.hand += self.deck.draw(1)
@@ -283,15 +298,15 @@ class GameState:
       self.cur_bet = self.blinds[1]
     elif self.state == PREFLOP:
       self._start_new_street(FLOP)
-      self.deck.draw(1)
+      self.deck.burn_card()
       self.board = self.deck.draw(3)
     elif self.state == FLOP:
       self._start_new_street(TURN)
-      self.deck.draw(1)
+      self.deck.burn_card()
       self.board += self.deck.draw(1)
     elif self.state == TURN:
       self._start_new_street(RIVER)
-      self.deck.draw(1)
+      self.deck.burn_card()
       self.board += self.deck.draw(1)
     elif self.state == RIVER:
       self.showdown_players = list((self.all_in_players + self.called_players)[::-1])
@@ -355,6 +370,7 @@ class GameState:
       print(pot)
       pot.move_to_winners()
     self.state = None
+    self.deck = None
     self.board = []
     self.pots = []
 
@@ -410,7 +426,7 @@ class GameState:
       new_event.player_id = self.players[self.cur_player].id
       new_event.player_name = self.players[self.cur_player].name
     new_event.save()
-    self._process_action(new_event)
+    return self._process_action(new_event)
 
   def _process_action(self, event):
     if event.is_canceled:
@@ -418,7 +434,14 @@ class GameState:
     action_type = event.event_type
     kwargs = json.loads(event.args)
     print(self.cur_player, action_type, kwargs)
-    if action_type == HARDCORE_SET:
+    if action_type == SET_DEALER_ERROR:
+      dealer_error = kwargs.get('mask', None)
+      if self.deck and dealer_error is not None:
+        self.deck.set_dealer_error(dealer_error)
+      event.is_canceled = True
+      event.save()
+      return True
+    elif action_type == HARDCORE_SET:
       data = kwargs.get('data')
       arr = list(map(int, data.split()))
       if len(arr) != self.get_players_count() + 1:
@@ -429,10 +452,12 @@ class GameState:
       for kvp in zip(arr[1:], [p for p in self.players if p.in_game]):
         kvp[1].chips = kvp[0]
       self._set_losers()
+      return True
     elif action_type == CANCEL_ROUND:
       models.GameEvent.objects.filter(table_id=self.table.id,
                                deck_id=self.cur_deck_id).update(is_canceled=True)
       models.CardDeck.objects.filter(deck_id=self.cur_deck_id).update(is_canceled=True)
+      return True
     elif action_type == INCREASE_BLINDS:
       self.blinds = self._get_next_blinds()
       return
@@ -526,7 +551,8 @@ class GameState:
   def _get_special_actions(self):
     return [self._build_action(INCREASE_BLINDS, 'Повысить блайнды до %s' % '/'.join(map(str, self._get_next_blinds()))),
             self._build_action(CANCEL_ROUND, 'Отменить текущую раздачу'),
-            self._build_action(HARDCORE_SET, 'Засетить по хардкору все-все-все', args=['data'])]
+            self._build_action(HARDCORE_SET, 'Засетить по хардкору все-все-все', args=['data']),
+            self._build_action(SET_DEALER_ERROR, 'Ошибка крупье', args=['mask'])]
 
   def as_dict(self):
     return {'table_name': self.table.name,

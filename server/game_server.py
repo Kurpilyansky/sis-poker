@@ -29,7 +29,9 @@ def handle_get_full_state():
 @socketio.on('make_action')
 def handle_make_action(*args):
   global game_state
-  game_state.make_action(**(args[0]))
+  if game_state.make_action(**(args[0])):
+    table_id = game_state.table.id
+    game_state = GameState.create_new(models.Table.objects.get(id=table_id))
   broadcast_full_game_state()
 
 @socketio.on('add_deck')

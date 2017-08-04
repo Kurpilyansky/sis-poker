@@ -131,6 +131,9 @@ socket.on('full_state', function(data) {
         if (player.bet) {
             $player.find('.bet').html(player.bet);
         }
+        if (player.win_chips) {
+            $player.find('.bet').html('+' + player.win_chips);
+        }
 
         if (player.place) {
             $player.find('.stack').text('#' + player.place);

@@ -42,7 +42,8 @@ class Player:
     self.opened_cards = False
     self.place = None
     self.hand = []
-    self.win_probs = []
+    self.win_probs = None
+    self.win_chips = None
     self.status = ''
 
   @property
@@ -82,6 +83,7 @@ class Player:
     self.opened_cards = False
     self.hand = []
     self.chips_on_round_start = self.chips
+    self.win_chips = None
 
   def evaluate_hand(self, evaluator, board):
     if not self.hand:
@@ -104,6 +106,7 @@ class Player:
       class_string = None
     return {'name': self.name,
             'win_probs': self.win_probs,
+            'win_chips': self.win_chips,
             'hand': self.hand,
             'chips': self.chips,
             'bet': self.bet,
@@ -173,9 +176,9 @@ class Pot:
     for i in range(n):
       player = self.winners[i]
       if i < z:
-        player.chips += (y + 1) * MIN_CHIP
+        player.win_chips += (y + 1) * MIN_CHIP
       else:
-        player.chips += y * MIN_CHIP
+        player.win_chips += y * MIN_CHIP
 
   def __str__(self):
     return 'chips %d, players %s, winners %s' % (self.chips, str(list(map(str, self.players))), str(list(map(str, self.winners))))
@@ -238,8 +241,11 @@ class GameState:
     if self.state == SHOWDOWN:
       self._find_next_player()  # TODO refactor
     else:
+      self.called_players = []
       self.cur_player = self.blinds_pos[0]
-    self.called_players = []
+      p = self.players[self.cur_player]
+      if not p.in_game or p.chips == 0:
+        self._find_next_player()
   
   def _find_next_player(self):
     if self.state == SHOWDOWN:
@@ -326,7 +332,9 @@ class GameState:
     self.state = END_ROUND
     self.cur_player = None
     for player in self.players:
-      player.win_probs = []
+      if player.in_game:
+        player.win_probs = []
+        player.win_chips = 0
     for pot in self.pots:
       players = [p for p in pot.players if p.in_game]
       vals = []
@@ -342,6 +350,8 @@ class GameState:
           pot.add_winner(player)
         else:
           player.win_probs.append(0.0)
+      print(pot)
+      pot.move_to_winners()
 
   def _set_losers(self):
     last_place = len([p for p in self.players if not p.place])
@@ -369,9 +379,11 @@ class GameState:
 
 
   def _end_round(self):
-    for pot in self.pots:
-      print(pot)
-      pot.move_to_winners()
+    for p in self.players:
+      if p.in_game:
+        p.chips += p.win_chips
+        p.win_chips = None
+        p.win_probs = None
     self.state = None
     self.deck = None
     self.board = []
@@ -454,7 +466,10 @@ class GameState:
       return True
     elif action_type == HARDCORE_SET:
       data = kwargs.get('data')
-      arr = list(map(int, data.split()))
+      try:
+        arr = list(map(int, data.split()))
+      except ValueError:
+        arr = []
       if len(arr) != len(self.players) + 3 or self.state is not None:
         event.is_canceled = True
         event.save()
@@ -496,7 +511,12 @@ class GameState:
     elif action_type in [CALL, CHECK, RAISE, BET, ALL_IN]:
       p = self.players[self.cur_player]
       if action_type == RAISE or action_type == BET:
-        raise_bet = int(kwargs.get('raise_bet'))
+        try:
+          raise_bet = int(kwargs.get('raise_bet'))
+        except ValueError:
+          event.is_canceled = True
+          event.save()
+          return
         new_bet = self.cur_bet + raise_bet
       elif action_type == ALL_IN:
         new_bet = p.chips + p.bet

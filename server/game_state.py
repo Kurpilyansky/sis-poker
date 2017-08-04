@@ -31,8 +31,9 @@ CANCEL_LAST_ACTION = 'CANCEL_LAST_ACTION'
 
 
 class Player:
-  def __init__(self, player_id, name, chips):
+  def __init__(self, player_id, player_pos, name, chips):
     self.id = player_id
+    self.pos = player_pos
     self.name = name
     self.chips = chips
     self.chips_on_round_start = self.chips
@@ -197,7 +198,7 @@ class GameState:
     self.players = players
     self.button_pos = len(players) - 1
     self.blinds_pos = [0, 1]
-    self.cur_player = 0
+    self.cur_player = None
     self.blinds = (5, 10)
     self.evaluator = deuces.Evaluator()
     self.all_in_players = []
@@ -205,7 +206,7 @@ class GameState:
 
   @classmethod
   def create_new(cls, table):
-    players = [Player(p.id, p.name, table.start_chips) for p in sorted(table.players, key=lambda p: p.table_place)]
+    players = [Player(p.id, i, p.name, table.start_chips) for i, p in enumerate(sorted(table.players, key=lambda p: p.table_place))]
     game_state = cls(table, players)
     events = list(models.GameEvent.objects.filter(table_id=table.id).order_by('event_id').all())
     for ev in events:
@@ -242,21 +243,19 @@ class GameState:
       self._find_next_player()  # TODO refactor
     else:
       self.called_players = []
-      self.cur_player = self.blinds_pos[0]
-      p = self.players[self.cur_player]
-      if not p.in_game or p.chips == 0:
+      self.cur_player = self.players[self.blinds_pos[0]]
+      if not self.cur_player.in_game or self.cur_player.chips == 0:
         self._find_next_player()
   
   def _find_next_player(self):
     if self.state == SHOWDOWN:
       if not self.showdown_players:
         return False
-      p = self.showdown_players.pop()
-      self.cur_player = [i for i in range(len(self.players)) if self.players[i].id == p.id][0]  #TODO refactor
+      self.cur_player = self.showdown_players.pop()
       return True
     iters = 0
     n = len(self.players)
-    i = self.cur_player
+    i = self.cur_player.pos
     while True:
       iters += 1
       i = (i + 1) % n
@@ -264,7 +263,7 @@ class GameState:
         break
       if iters > 2 * n:
         return False
-    self.cur_player = i
+    self.cur_player = self.players[i]
     return True
 
   def iter_players(self, include_losers=False):
@@ -371,9 +370,9 @@ class GameState:
 
   def _get_next_pos(self, pos):
     backup_val = self.cur_player  #TODO refactor
-    self.cur_player = pos
+    self.cur_player = self.players[pos]
     self._find_next_player()
-    pos = self.cur_player
+    pos = self.cur_player.pos
     self.cur_player = backup_val
     return pos
 
@@ -438,8 +437,8 @@ class GameState:
                           event_type=action_type,
                           args=json.dumps(kwargs))
     if action_type in [FOLD, OPEN, CALL, CHECK, RAISE, BET, ALL_IN]:
-      new_event.player_id = self.players[self.cur_player].id
-      new_event.player_name = self.players[self.cur_player].name
+      new_event.player_id = self.cur_player.id
+      new_event.player_name = self.cur_player.name
     new_event.save()
     return self._process_action(new_event)
 
@@ -502,14 +501,14 @@ class GameState:
       self._end_round()
       return
     elif action_type == FOLD:
-      self.players[self.cur_player].fold()
+      self.cur_player.fold()
       if self._check_one_player_in_game():
         self._detect_winner()
         return
     elif action_type == OPEN:
-      self.players[self.cur_player].open_cards()
+      self.cur_player.open_cards()
     elif action_type in [CALL, CHECK, RAISE, BET, ALL_IN]:
-      p = self.players[self.cur_player]
+      p = self.cur_player
       if action_type == RAISE or action_type == BET:
         try:
           raise_bet = int(kwargs.get('raise_bet'))
@@ -555,7 +554,7 @@ class GameState:
     if not self._find_next_player():
       self._all_in_all_in()
       return
-    player = self.players[self.cur_player]
+    player = self.cur_player
     if player.bet == self.cur_bet and player.any_moved:
       self._deal_cards()
 
@@ -576,7 +575,7 @@ class GameState:
       return [self._build_action(FOLD),
               self._build_action(OPEN)]
     actions = []
-    player = self.players[self.cur_player]
+    player = self.cur_player
     actions.append(self._build_action(FOLD))
     actions.append(self._build_action(CHECK if self.cur_bet == player.bet else CALL))
     actions.append(self._build_action(BET if self.cur_bet == 0 else RAISE, args=['raise_bet']))
@@ -602,7 +601,7 @@ class GameState:
             'blinds': self.blinds,
             'players': [p.as_dict(self.evaluator,
                                   self.board,
-                                  self.cur_player is not None and p.id == self.players[self.cur_player].id)
+                                  self.cur_player is not None and p.id == self.cur_player.id)
                         for p in self.iter_players(True)],
             'actions': self._get_actions(),
             'special_actions': self._get_special_actions()}

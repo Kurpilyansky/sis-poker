@@ -462,19 +462,32 @@ class GameState:
     return count == 1
 
   def _get_next_blinds(self):
+    """5/10, 10/20, 15/30, 25/50, 50/100, 75/150, 100/200 далее x2"""
+    if self.blinds[0] == 10:
+      return (15, 30)
+    elif self.blinds[0] == 15:
+      return (25, 50)
+    elif self.blinds[0] == 50:
+      return (75, 150)
+    elif self.blinds[0] == 75:
+      return (100, 200)
+    else:
+      return (self.blinds[0] * 2, self.blinds[1] * 2)
+
     """
       5/10
       10/20
       15/30
       25/50
       *2...
-    """
+    """"""
     if self.blinds[0] == 10:
       return (15, 30)
     elif self.blinds[0] == 15:
       return (25, 50)
     else:
       return (self.blinds[0] * 2, self.blinds[1] * 2)
+    """
 
   def make_action(self, action_type, **kwargs):
     new_event = models.GameEvent(table=self.table,

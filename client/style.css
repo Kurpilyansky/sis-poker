@@ -120,7 +120,7 @@ body {
     line-height: 40px;
     vertical-align: middle;
     margin-right: 20px;
-    width: 520px; }
+    width: 260px; }
   .player-row .win-probs .item {
     float: left;
     display: inline-block;
@@ -155,12 +155,27 @@ body {
   background-color: darkred;
   color: white; }
 
-.glob {
+.glob-horisontal {
   width: 100%;
   display: table-row; }
-  .glob .space {
+  .glob-horisontal .space {
     display: inline-block;
     width: 30px; }
+
+.glob-vertical {
+  display: table-row; }
+  .glob-vertical .table {
+    float:left;
+    overflow: hidden;
+    width: 100%; }
+  .glob-vertical .info {
+    float:left;
+    overflow: hidden;
+    width: 100%; }
+  .glob-vertical .space {
+    float:left;
+    overflow: hidden;
+    width: 100%; }
 
 .info {
   border: 2px #151 solid;
@@ -269,4 +284,16 @@ body {
     padding-top: 3px;
     padding-left: 3px; }
 
+.board-only {
+  display: block;
+}
+
+.board-only div {
+  display: block;
+  box-sizing: border-box;
+}
+
+.board-only .info {
+  padding-bottom: 10px;
+}
 /*# sourceMappingURL=style.css.map */

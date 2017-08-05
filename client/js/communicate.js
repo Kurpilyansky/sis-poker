@@ -91,7 +91,7 @@ socket.on('full_state', function(data) {
     }
 
     while ($('.player-row').length < players.length) {
-        $('.glob').last().before('<div class="player-row"></div>');
+        $('.player-row-prototype').last().before('<div class="player-row"></div>');
         $('.player-row').last().html($('.player-row-prototype').html());
     }
 

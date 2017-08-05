@@ -38,7 +38,7 @@ def generate_boards(deck, length, players_num):
       yield x
   else:
     random.seed(time.time())
-    num_iterations = 20000 // players_num
+    num_iterations = 15000 // players_num
     for _ in range(num_iterations):
       yield random.sample(deck, length)
 

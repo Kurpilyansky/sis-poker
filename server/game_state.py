@@ -4,6 +4,8 @@ import json
 import random
 import time
 
+import itertools
+
 from server import deuces
 
 PREFLOP = 'PREFLOP'
@@ -29,6 +31,16 @@ HARDCORE_SET = 'HARDCORE_SET'
 SET_DEALER_ERROR = 'SET_DEALER_ERROR'
 CANCEL_LAST_ACTION = 'CANCEL_LAST_ACTION'
 
+
+def generate_boards(deck, length, players_num):
+  if length <= 2:
+    for x in  itertools.combinations(deck, length):
+      yield x
+  else:
+    random.seed(time.time())
+    num_iterations = 20000 // players_num
+    for _ in range(num_iterations):
+      yield random.sample(deck, length)
 
 class Player:
   def __init__(self, player_id, player_pos, name, chips):
@@ -70,7 +82,7 @@ class Player:
 
   def clear_street_info(self):
     self.any_moved = False
-    self.win_probs = []
+    self.win_probs = None
     if self.place:
       self.status = ''
     elif self.chips == 0:
@@ -128,31 +140,35 @@ class CardDeck:
     self.offset = 0
     self.dealer_error = model.dealer_error
     self.cards = model.cards.split()
-    #self.cards = [val+suit for val in '23456789TJQKA' for suit in 'hdsc']
-    #random.shuffle(self.cards)
+    self.free_cards = {val+suit for val in '23456789TJQKA' for suit in 'hdsc'}
+
+  def get_free_cards(self):
+    return list(self.free_cards)
 
   def set_dealer_error(self, dealer_error):
     self._model.dealer_error = dealer_error
     self._model.save()
 
-  def draw(self, count):
+  def draw(self, count, is_burn=False):
     res = self.cards[self.offset:self.offset + count]
     self.offset += count
+    if not is_burn:
+      self.free_cards -= set(res)
     return res
 
   def burn_card(self):
     error = self.dealer_error & 1
     self.dealer_error >>= 1
     if error == 0:
-      self.draw(1)
+      self.draw(1, is_burn=True)
     else:
       print('skip burning card')
 
 
 class Pot:
-  def __init__(self):
+  def __init__(self, players=None):
     self.chips = 0
-    self.players = []
+    self.players = list(players or [])
     self.winners = []
 
   def add_player_bet(self, player, bet):
@@ -208,9 +224,13 @@ class GameState:
   def create_new(cls, table):
     players = [Player(p.id, i, p.name, table.start_chips) for i, p in enumerate(sorted(table.players, key=lambda p: p.table_place))]
     game_state = cls(table, players)
+    game_state._creating = True
     events = list(models.GameEvent.objects.filter(table_id=table.id).order_by('event_id').all())
     for ev in events:
       game_state._process_action(ev)
+    game_state._creating = False
+    if game_state.state:
+      game_state._calculate_win_probs()
     return game_state
 
   def get_players_count(self):
@@ -227,6 +247,8 @@ class GameState:
         self.pots[-1].keep_players_in_game()
         if len(self.pots[-1].players) != len(bets):
           self.pots.append(Pot())
+        else:
+          self.pots[-1].players = []
       min_bet = min(bets)
       for p in self.iter_players():
         if p.bet > 0:
@@ -324,7 +346,42 @@ class GameState:
       self._detect_winner()
     else:
       raise ValueError('unknown self.state ' + self.state)
+    if not self._creating and self.state != SHOWDOWN:
+      self._calculate_win_probs()
     return True
+
+  def _calculate_win_probs(self):
+    for player in self.players:
+      if player.in_game:
+        player.win_probs = []
+      else:
+        player.win_probs = None
+    pots = self.pots or [Pot([p for p in self.players if p.in_game])]
+    for pot in pots:
+      print(pot)
+      pot.keep_players_in_game()
+      players = pot.players
+      if len(players) == 1:
+        players[0].win_probs.append(1.0)
+      else:
+        for player in players:
+          player.win_probs.append(0.0)
+        sum_probs = 0
+        for end_board in generate_boards(self.deck.get_free_cards(), 5 - len(self.board), len(players)):
+          vals = []
+          cur_board = self.board + list(end_board)
+          for player in players:
+            vals.append(player.evaluate_hand(self.evaluator, cur_board))
+          best_val = min(vals)
+          cnt = len([1 for val in vals if val == best_val])
+          sum_probs += 1.0
+          for player, val in zip(players, vals):
+            if val == best_val:
+              player.win_probs[-1] += 1.0 / float(cnt)
+        for player in players:
+          player.win_probs[-1] /= sum_probs
+    for player in self.players:
+      print(player.win_probs)
 
   def _detect_winner(self):
     self._move_bets_to_pot()
@@ -332,24 +389,13 @@ class GameState:
     self.cur_player = None
     for player in self.players:
       if player.in_game:
-        player.win_probs = []
         player.win_chips = 0
-    for pot in self.pots:
-      players = [p for p in pot.players if p.in_game]
-      vals = []
-      if len(players) == 1:
-        vals = [-1]
-      else:
-        for player in players:
-          vals.append(player.evaluate_hand(self.evaluator, self.board))
-      best_val = min(vals)
-      for player, val in zip(players, vals):
-        if val == best_val:
-          player.win_probs.append(100.0)
+    self._calculate_win_probs()
+    for i, pot in enumerate(self.pots):
+      players = pot.players
+      for player in players:
+        if player.win_probs[i] > 0.0:
           pot.add_winner(player)
-        else:
-          player.win_probs.append(0.0)
-      print(pot)
       pot.move_to_winners()
 
   def _set_losers(self):
@@ -502,6 +548,8 @@ class GameState:
       return
     elif action_type == FOLD:
       self.cur_player.fold()
+      if not self._creating:
+        self._calculate_win_probs()
       if self._check_one_player_in_game():
         self._detect_winner()
         return

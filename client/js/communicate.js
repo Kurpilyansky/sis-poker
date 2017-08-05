@@ -21,6 +21,33 @@ socket.on('full_state', function(data) {
     state = stateDict[state];
     $('#state').html(state);
 
+    var value = {
+        'A': 'A',
+        'K': 'K',
+        'Q': 'Q',
+        'J': 'J',
+        'T': '10',
+        '9': '9',
+        '8': '8',
+        '7': '7',
+        '6': '6',
+        '5': '5',
+        '4': '4',
+        '3': '3',
+        '2': '2'
+    };
+    var suit = {
+        'c': '&clubs;',
+        's': '&spades;',
+        'h': '&hearts;',
+        'd': '&diams;'
+    };
+    var color = {
+        'c': 'black',
+        's': 'black',
+        'd': 'red',
+        'h': 'red'
+    };
     var pots = data['pots'];
 
     var $pots = $('#pots');
@@ -52,19 +79,9 @@ socket.on('full_state', function(data) {
             $card.html('<i>&nbsp;</i>');
         } else {
             $card.html('<span>&nbsp;</span><span>&nbsp;</span><i>&nbsp;</i>');
-            if (card[1] === 's' || card[1] === 'c') {
-                $card.addClass('black');
-            } else {
-                $card.addClass('red');
-            }
-            var suit = {
-                'c': '&clubs;',
-                's': '&spades;',
-                'h': '&hearts;',
-                'd': '&diams;'
-            }[card[1]];
-            $card.find('i').html(suit);
-            $card.find('span').html(card[0].toUpperCase());
+            $card.addClass(color[card[1]]);
+            $card.find('i').html(suit[card[1]]);
+            $card.find('span').html(value[card[0]]);
         }
     });
 
@@ -81,18 +98,6 @@ socket.on('full_state', function(data) {
 
 
     players.forEach(function(player, ind) {
-        var suit = {
-            'c': '&clubs;',
-            's': '&spades;',
-            'h': '&hearts;',
-            'd': '&diams;'
-        };
-        var color = {
-            'c': 'black',
-            's': 'black',
-            'd': 'red',
-            'h': 'red'
-        };
         $player = $($('.player-row')[ind]);
 
         $player.removeClass('fault');
@@ -114,10 +119,10 @@ socket.on('full_state', function(data) {
         $player.find('.cards .card').removeClass('closed');
 
         if (player.hand.length) {
-            $player.find('.cards .card:nth-child(1) span').html(player.hand[0][0]);
+            $player.find('.cards .card:nth-child(1) span').html(value[player.hand[0][0]]);
             $player.find('.cards .card:nth-child(1) i').html(suit[player.hand[0][1]]);
             $player.find('.cards .card:nth-child(1)').addClass(color[player.hand[0][1]]);
-            $player.find('.cards .card:nth-child(2) span').html(player.hand[1][0]);
+            $player.find('.cards .card:nth-child(2) span').html(value[player.hand[1][0]]);
             $player.find('.cards .card:nth-child(2) i').html(suit[player.hand[1][1]]);
             $player.find('.cards .card:nth-child(2)').addClass(color[player.hand[1][1]]);
         } else {
@@ -133,6 +138,15 @@ socket.on('full_state', function(data) {
         }
         if (player.win_chips) {
             $player.find('.bet').html('+' + player.win_chips);
+        }
+        $player.find('.win-probs').html('&nbsp;');
+        if (player.win_probs) {
+            win_probs = []
+            for (var i = 0; i < player.win_probs.length; ++i) {
+              text = (player.win_probs[i] * 100).toFixed() + '%';
+              win_probs.push('<span class="item">' + text + '</span>');
+            }
+            $player.find('.win-probs').html(win_probs.join('&nbsp;'));
         }
 
         if (player.place) {

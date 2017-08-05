@@ -47,7 +47,7 @@ class CardDeck(models.Model):
   table = models.ForeignKey(Table, null=True)
   deck_id = models.IntegerField()
   cards = models.CharField(max_length=500)
-  dealer_error = models.IntegerField(help_text='маска ошибок дилера')
+  dealer_error = models.IntegerField(help_text='маска ошибок дилера', default=0)
   
   is_canceled = models.BooleanField(default=False)
 

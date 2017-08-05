@@ -2,6 +2,7 @@
 <head>
     <script type="text/javascript" src="js/socket.io.min.js"></script>
     <script type="text/javascript" src="js/jquery-3.2.1.min.js"></script>
+    <script type="text/javascript" src="js/config.js"></script>
     <meta charset="utf8" />
     <link href="style.css" rel="stylesheet" type="text/css" />
     <style>
@@ -24,7 +25,7 @@
 </table>
 
 <script type="text/javascript" charset="utf-8">
-    var socket = io.connect('http://localhost:' + 5000);
+    var socket = io.connect('http://' + HOSTNAME + ':' + PORT);
     var deck_id = -1;
     var deck = [];
     var need_cards = 100;

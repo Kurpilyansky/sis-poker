@@ -2,8 +2,7 @@
  * Created by shhdup on 16/07/2017.
  */
 
-//var socket = io.connect('http://localhost:' + 5000);
-var socket = io.connect('http://10.0.1.144:' + 5000);
+var socket = io.connect('http://' + HOSTNAME + ':' + PORT);
 
 socket.on('full_state', function(data) {
     console.log(data);

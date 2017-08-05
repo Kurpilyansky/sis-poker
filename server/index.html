@@ -6,16 +6,26 @@
   .player.current {
     background-color: lightyellow;
   }
+  td {
+    padding: 10px;
+  }
+  input {
+    margin: 5px;
+  }
+  #actions {
+    height: 124px;
+  }
 </style>
 
 </head>
 <body>
-  <div id='actions'></div>
   <div id='game'>
     <div id='board'></div>
     <div id='pot'></div>
-    <div id='players'></div>
+    <table id='players'>
+    </table>
   </div>
+  <div id='actions'></div>
   <div id='special_actions'></div>
 
 <script type="text/javascript" charset="utf-8">
@@ -24,33 +34,37 @@
     console.log(data);
     $('#board').text(data.board.join(' '));
     $('#pot').text(data.pots.length ? ('Pot: ' + data.pots.join(', ')) : '');
-    var player_divs = []
+    var player_rows = []
     for (var i = 0; i < data.players.length; ++i) {
       var p = data.players[i];
-      text = '<div class="player ' + (p.is_current ? 'current' : '') + '">' + p.name;
+      text = '<tr class="player ' + (p.is_current ? 'current' : '') + '"><td>' + p.name + '</td>';
       if (p.place) {
-        text += ' &ndash; ' + p.place + ' место'
+        text += '<td></td><td>' + p.place + ' место</td>'
       } else {
-        text += ' ' + p.chips + ' + ' + p.bet;
         if (p.status) {
-          text += ' ' + p.status;
+          text += '<td>' + p.status + '</td>';
+        } else if (p.is_fault) {
+          text += '<td>Fold</td>';
+        } else {
+          text += '<td></td>';
         }
+        text += '<td>' + p.chips + ' + ' + (p.win_chips ? p.win_chips : p.bet) + '</td>';
         if (p.opened_cards) {
           if (p.hand.length) {
-            text += ': ' + p.hand.join(' ');
+            text += '<td>' + p.hand.join(' ') + '</td>';
           }
           if (p.combination) {
-            text += ' ' + p.combination;
+            text += '<td>' + p.combination + '</td>';
           }
           /*if (p.win_probs) {
             text += ' '  + p.win_probs.join(' ')
           }*/
         }
       }
-      text += '</div>';
-      player_divs.push(text);
+      text += '</tr>';
+      player_rows.push(text);
     }
-    $('#players').html(player_divs.join(''));
+    $('#players').html(player_rows.join(''));
 
     function create_actions(action_div_id, actions) {
       var $actions_div = $('#' + action_div_id);

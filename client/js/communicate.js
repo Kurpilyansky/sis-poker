@@ -143,8 +143,7 @@ socket.on('full_state', function(data) {
         if (player.win_probs) {
             win_probs = []
             for (var i = 0; i < player.win_probs.length; ++i) {
-              text = (player.win_probs[i] * 100).toFixed() + '%';
-              win_probs.push('<span class="item">' + text + '</span>');
+              win_probs.push('<span class="item">' + (player.win_probs[i] * 100).toFixed() + '<span class="percent-symbol">%</span></span>');
             }
             $player.find('.win-probs').html(win_probs.join('&nbsp;'));
         }

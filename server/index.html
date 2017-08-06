@@ -30,7 +30,7 @@
   <div id='special_actions'></div>
 
 <script type="text/javascript" charset="utf-8">
-  var socket = io.connect('http://10.15.2.239:' + 5000); /* TODO use config.js */
+  var socket = io.connect('http://127.0.0.1:' + 5000); /* TODO use config.js */
   socket.on('full_state', function(data) {
     console.log(data);
     $('#board').html(data.board.join(' ') + '&nbsp;');

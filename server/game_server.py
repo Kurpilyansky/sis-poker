@@ -3,7 +3,7 @@ from flask_socketio import send, emit
 from flask_socketio import SocketIO
 
 from server import models
-from server.game_state import GameState
+from server.game_state import GameState, ReplayedGameState
 
 import json
 import random
@@ -34,6 +34,13 @@ def handle_make_action(*args):
     game_state = GameState.create_new(models.Table.objects.get(id=table_id))
   broadcast_full_game_state()
 
+@socketio.on('control')
+def handle_make_action(*args):
+  global game_state
+  print('control', args)
+  game_state.make_control(**(args[0]))
+  broadcast_full_game_state()
+
 @socketio.on('add_deck')
 def handle_add_deck(kwargs = None):
   kwargs = kwargs or dict()
@@ -60,8 +67,12 @@ def handle_add_deck(kwargs = None):
         'success': success},
        json=True)
 
-def run_game_server(table_id):
+def run_game_server(table_id, replay_mode):
   global game_state
-  game_state = GameState.create_new(models.Table.objects.get(id=table_id))
+  table = models.Table.objects.get(id=table_id)
+  if replay_mode:
+    game_state = ReplayedGameState(table)
+  else:
+    game_state = GameState.create_new(table)
   socketio.run(app, host='0.0.0.0')
 

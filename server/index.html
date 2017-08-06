@@ -25,15 +25,16 @@
     <table id='players'>
     </table>
   </div>
+  <div id='controls'></div>
   <div id='actions'></div>
   <div id='special_actions'></div>
 
 <script type="text/javascript" charset="utf-8">
-  var socket = io.connect('http://localhost:' + 5000);
+  var socket = io.connect('http://10.15.2.239:' + 5000); /* TODO use config.js */
   socket.on('full_state', function(data) {
     console.log(data);
-    $('#board').text(data.board.join(' '));
-    $('#pot').text(data.pots.length ? ('Pot: ' + data.pots.join(', ')) : '');
+    $('#board').html(data.board.join(' ') + '&nbsp;');
+    $('#pot').html(data.pots.length ? ('Pot: ' + data.pots.join(', ')) : '&nbsp;');
     var player_rows = []
     for (var i = 0; i < data.players.length; ++i) {
       var p = data.players[i];
@@ -66,18 +67,20 @@
     }
     $('#players').html(player_rows.join(''));
 
-    function create_actions(action_div_id, actions) {
+    function create_actions(emit_text, action_div_id, actions) {
       var $actions_div = $('#' + action_div_id);
       $actions_div.html('');
       actions.forEach(function(action) {
             var $action = $("<input/>").attr('type', 'submit').attr('value', action.text);
             $actions_div.append($action);
             var args_inputs = []
-            action.args.forEach(function(arg) {
-                  var $arg = $("<input/>").attr('name', arg);
-                  args_inputs.push($arg);      
-                  $actions_div.append($arg);
-                });
+            if (action.args) {
+              action.args.forEach(function(arg) {
+                    var $arg = $("<input/>").attr('name', arg);
+                    args_inputs.push($arg);      
+                    $actions_div.append($arg);
+                  });
+            }
             $actions_div.append($('<br/>'));
             $action.click(function () {
                   var data = {'action_type': action.type}
@@ -85,13 +88,14 @@
                         data[arg_input.attr('name')] = arg_input.val();
                       });
                   console.log(data)
-                  socket.emit('make_action', data);
+                  socket.emit(emit_text, data);
                 });
           });
     }
 
-    create_actions('actions', data.actions);
-    create_actions('special_actions', data.special_actions);
+    create_actions('make_action', 'actions', data.actions);
+    create_actions('make_action', 'special_actions', data.special_actions);
+    create_actions('control', 'controls', data.controls);
 
   });
 

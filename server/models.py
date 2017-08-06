@@ -69,3 +69,17 @@ class GameEvent(models.Model):
 
   def get_text(self):
     return '%s %s %s' % (self.player_name, self.event_type, self.args)
+
+  @classmethod
+  def get_prev_event(cls, table_id, event_id):
+    return cls.objects.filter(table_id=table_id,
+                              is_canceled=False,
+                              event_id__lt=event_id
+                              ).order_by('-event_id').first()
+    
+  @classmethod
+  def get_next_event(cls, table_id, event_id):
+    return cls.objects.filter(table_id=table_id,
+                              is_canceled=False,
+                              event_id__gt=event_id
+                              ).order_by('event_id').first()

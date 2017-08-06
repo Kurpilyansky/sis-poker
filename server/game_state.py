@@ -31,6 +31,10 @@ HARDCORE_SET = 'HARDCORE_SET'
 SET_DEALER_ERROR = 'SET_DEALER_ERROR'
 CANCEL_LAST_ACTION = 'CANCEL_LAST_ACTION'
 
+PREV_ROUND = 'PREV_ROUND'
+NEXT_ROUND = 'NEXT_ROUND'
+PREV_ACTION = 'PREV_ACTION'
+NEXT_ACTION = 'NEXT_ACTION'
 
 def generate_boards(deck, length, players_num):
   if length <= 2:
@@ -219,19 +223,32 @@ class GameState:
     self.evaluator = deuces.Evaluator()
     self.all_in_players = []
     self.called_players = []
+    self.round_num = 0
+    self._need_calc_win_probs = True
 
   @classmethod
-  def create_new(cls, table):
+  def create_new(cls, table, event_id=None):
     players = [Player(p.id, i, p.name, table.start_chips) for i, p in enumerate(sorted(table.players, key=lambda p: p.table_place))]
     game_state = cls(table, players)
-    game_state._creating = True
-    events = list(models.GameEvent.objects.filter(table_id=table.id).order_by('event_id').all())
+    game_state.do_not_calc_win_probs()
+    query_set = models.GameEvent.objects.filter(table_id=table.id).order_by('event_id')
+    if event_id is None:
+      query_set = query_set.all()
+    else:
+      query_set = query_set.filter(event_id__lte=event_id)
+    events = list(query_set)
     for ev in events:
-      game_state._process_action(ev)
-    game_state._creating = False
-    if game_state.state:
-      game_state._calculate_win_probs()
+      game_state.process_action(ev)
+    game_state.do_calc_win_probs()
     return game_state
+
+  def do_not_calc_win_probs(self):
+    self._need_calc_win_probs = False
+
+  def do_calc_win_probs(self):
+    self._need_calc_win_probs = True
+    if self.state and self.state != END_GAME:
+      self._calculate_win_probs()
 
   def get_players_count(self):
     return len([p for p in self.players if not p.place])
@@ -304,6 +321,7 @@ class GameState:
   def _deal_cards(self):
     print('deal cards in state ' + str(self.state))
     if self.state == None:
+      self.round_num += 1
       deck_model = self.table.get_next_deck(self.cur_deck_id)
       if not deck_model:
         return False
@@ -346,7 +364,7 @@ class GameState:
       self._detect_winner()
     else:
       raise ValueError('unknown self.state ' + self.state)
-    if not self._creating and self.state != SHOWDOWN:
+    if self._need_calc_win_probs and self.state != SHOWDOWN:
       self._calculate_win_probs()
     return True
 
@@ -409,6 +427,7 @@ class GameState:
     if last_place == 1:
       winner = [p for p in self.players if not p.place][0]
       winner.place = 1
+      winner.clear_round_info()
       self.state = END_GAME
       return True
     return False
@@ -499,9 +518,9 @@ class GameState:
       new_event.player_id = self.cur_player.id
       new_event.player_name = self.cur_player.name
     new_event.save()
-    return self._process_action(new_event)
+    return self.process_action(new_event)
 
-  def _process_action(self, event):
+  def process_action(self, event):
     if event.is_canceled:
       return
     action_type = event.event_type
@@ -561,7 +580,7 @@ class GameState:
       return
     elif action_type == FOLD:
       self.cur_player.fold()
-      if not self._creating:
+      if self._need_calc_win_probs:
         self._calculate_win_probs()
       if self._check_one_player_in_game():
         self._detect_winner()
@@ -655,6 +674,7 @@ class GameState:
 
   def as_dict(self):
     return {'table_name': self.table.name,
+            'round_num': self.round_num,
             'state': self.state,
             'board': self.board,
             'pots': [pot.chips for pot in self.pots],
@@ -665,5 +685,80 @@ class GameState:
                                   self.cur_player is not None and p.id == self.cur_player.id)
                         for p in self.iter_players(True)],
             'actions': self._get_actions(),
-            'special_actions': self._get_special_actions()}
+            'special_actions': self._get_special_actions(),
+            'controls': []}
+
+
+class ReplayedGameState:
+  def __init__(self, table):
+    self._table = table
+    self._to_event_id(-1)
+
+  def _to_event_id(self, event_id):
+    self.cur_event_id = event_id
+    self.game_state = GameState.create_new(self._table, self.cur_event_id)
+
+  def prev_round(self):
+    self.prev_action()
+    if self.game_state.state:
+      start_event = models.GameEvent.objects.filter(table_id=self._table.id,
+                                            event_id__lt=self.cur_event_id,
+                                            event_type=START).order_by('-event_id').first()
+      if start_event:
+        self._to_event_id(start_event.event_id)
+      else:
+        self._to_event_id(-1)
+    else:
+      while not self.game_state.state and self.prev_action():
+        pass
+
+  def next_round(self):
+    self.next_action()
+    if self.game_state.state:
+      self.game_state.do_not_calc_win_probs()
+      while self.game_state.state != END_ROUND:
+        if not self.next_action():
+          break
+      self.game_state.do_calc_win_probs()
+    else:
+      while not self.game_state.state and self.next_action():
+        pass
+
+  def prev_action(self):
+    prev_event = models.GameEvent.get_prev_event(self._table.id, self.cur_event_id)
+    if prev_event:
+      self._to_event_id(prev_event.event_id)
+      return True
+
+  def next_action(self):
+    next_event = models.GameEvent.get_next_event(self._table.id, self.cur_event_id)
+    if next_event:
+      self.cur_event_id = next_event.event_id
+      self.game_state.process_action(next_event)
+      return True
+
+  def make_control(self, action_type):
+    if action_type == PREV_ACTION:
+      self.prev_action()
+    elif action_type == NEXT_ACTION:
+      self.next_action()
+    elif action_type == PREV_ROUND:
+      self.prev_round()
+    elif action_type == NEXT_ROUND:
+      self.next_round()
+
+  def _build_control(self, control_action, text):
+    return {'type': control_action,
+            'text': text,
+            'args': []}
+
+  def as_dict(self):
+    res = self.game_state.as_dict()
+    res['actions'] = []
+    res['special_actions'] = []
+    res['controls'] = [self._build_control(PREV_ROUND, '<<'),
+                       self._build_control(NEXT_ROUND, '>>'),
+                       self._build_control(PREV_ACTION, '<'),
+                       self._build_control(NEXT_ACTION, '>')]
+    return res
 

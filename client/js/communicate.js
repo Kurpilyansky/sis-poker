@@ -18,7 +18,6 @@ socket.on('full_state', function(data) {
 
     };
     state = stateDict[state];
-    $('#state').html(state);
 
     var value = {
         'A': 'A',
@@ -61,6 +60,10 @@ socket.on('full_state', function(data) {
 
     var table_name = data['table_name'];
     $('#table-name').html(table_name);
+
+    $('.blinds .num').html(data['blinds'].join('/'));
+    $('#state .round-num').html(data['round_num']);
+    $('#state .phase-name').html(state ? ':' + state : '&nbsp;');
 
     var cards = data['board'];
 

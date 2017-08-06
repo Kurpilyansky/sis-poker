@@ -299,4 +299,10 @@ body {
 .board-only .info {
   padding-bottom: 10px;
 }
+
+#controls input {
+  width: 20%;
+  margin: 30px;
+  font-size: 60px;
+}
 /*# sourceMappingURL=style.css.map */

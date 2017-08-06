@@ -164,4 +164,18 @@ socket.on('full_state', function(data) {
 
     });
 
+    var controls = data['controls'];
+    if (controls) {
+      var $controls_div = $('#controls');
+      $controls_div.html('');
+      controls.forEach(function(control) {
+          var $control = $("<input/>").attr('type', 'submit').attr('value', control.text);
+          $controls_div.append($control);
+          //$controls_div.append($('<br/>'));
+          $control.click(function () {
+              var data = {'action_type': control.type};
+              socket.emit('control', data);
+            });
+        });
+    }
 });

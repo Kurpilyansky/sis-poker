@@ -39,12 +39,12 @@ class Table(models.Model):
 
 class Player(models.Model):
   name = models.CharField(max_length=100)
-  table = models.ForeignKey(Table)
+  table = models.ForeignKey(Table, on_delete=models.CASCADE)
   table_place = models.IntegerField()
 
 
 class CardDeck(models.Model):
-  table = models.ForeignKey(Table, null=True)
+  table = models.ForeignKey(Table, null=True, on_delete=models.CASCADE)
   deck_id = models.IntegerField()
   cards = models.CharField(max_length=500)
   dealer_error = models.IntegerField(help_text='маска ошибок дилера', default=0)
@@ -53,7 +53,7 @@ class CardDeck(models.Model):
 
 
 class GameEvent(models.Model):
-  table = models.ForeignKey(Table)
+  table = models.ForeignKey(Table, on_delete=models.CASCADE)
   deck_id = models.IntegerField()
   player_id = models.IntegerField(null=True, blank=True)
   player_name = models.CharField(max_length=100, null=True, blank=True)

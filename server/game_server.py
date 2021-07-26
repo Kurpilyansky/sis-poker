@@ -11,7 +11,7 @@ import time
 
 app = Flask(__name__)
 #app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 game_state = None
 
 def send_full_game_state():
